@@ -1,0 +1,253 @@
+# Intent catalog v0 — headless-erp
+#
+# DocType metadata already describes STRUCTURE (fields, links, types) and is
+# introspectable at runtime, so this file deliberately does not repeat it.
+# What it adds is the layer metadata does not contain: business meaning,
+# what the system derives, what it must refuse, and what it guarantees after.
+#
+# The refuse/override split is not a taste call. It is derived from the Phase 2
+# census (reports/census.json) crossed with `read_only` in the child DocType:
+#
+#   read-only in the Desk UI            -> refuse.   No human could set it, so
+#                                          no caller may either.
+#   editable in the Desk UI             -> override. A human may set it
+#                                          deliberately, so a caller may too,
+#                                          but only with a recorded reason.
+#   recomputed by the server anyway     -> derived.  Never accepted.
+#
+# Every `refuse` below names the census evidence that put it there.
+
+version: 0
+erpnext_version: v16.34.1
+census: reports/census.json
+
+# Applies to every intent unless an intent overrides it.
+defaults:
+  refuse:
+    - field: price_list_rate
+      evidence: "census: silently_accepted on 8/9 doctypes; read_only on 5/9 child doctypes"
+      reason: >
+        The reference price. Caller-supplied values fabricate the baseline that
+        discount_amount is computed against, which makes an override
+        undetectable by comparing rate to list. No Desk session can set it.
+    - field: weight_per_unit
+      evidence: "census: silently_accepted on 8/9; read_only on 4/8 child doctypes"
+      reason: "Item master property, not a transaction value."
+    - field: discount_amount
+      evidence: "census: silently_accepted on 8/9"
+      reason: "Computed from price_list_rate and rate. Accepting it directly lets the two disagree."
+    - field: discount_percentage
+      evidence: "census: silently_accepted on 8/9"
+      reason: "Same as discount_amount."
+  override:
+    - field: rate
+      evidence: "census: silently_accepted on 8/9; editable on 9/9 child doctypes"
+      requires: [reason]
+      records: [discount_amount, override_log]
+      reason: >
+        A human may deliberately sell off-list, so a caller may too. The
+        difference is that the API must not let it happen silently: the
+        derived rate is computed first, the override is recorded against it,
+        and the reason is stored on the document.
+
+intents:
+
+  - id: quote
+    summary: Offer goods to a customer at stated terms. Commits nothing.
+    maps_to: {doctype: Quotation, submittable: true, posts_gl: false, posts_stock: false}
+    preconditions:
+      - customer exists and is not disabled
+      - every item exists and is not disabled
+      - a price is resolvable for each item from the selling price list
+    derives: [price_list_rate, rate, conversion_factor, stock_uom, item_tax_template, amount, net_rate, net_amount]
+    postconditions:
+      - no ledger movement of any kind
+      - quotation is available as a source for `sell`
+    invariants:
+      - grand_total == sum(net_amount) + total_taxes
+    reversal: {kind: cancel, restriction: none, note: "Nothing posted, so cancellation is free."}
+
+  - id: sell
+    summary: Accept a customer order. A commitment, not a transaction.
+    maps_to: {doctype: Sales Order, submittable: true, posts_gl: false, posts_stock: false}
+    preconditions:
+      - customer exists and is not disabled
+      - delivery_date is on or after transaction_date
+      - a price is resolvable for each item
+    derives: [price_list_rate, rate, conversion_factor, stock_uom, item_tax_template, amount, net_rate, net_amount]
+    postconditions:
+      - no ledger movement
+      - ordered quantity is reserved; available-to-promise falls without stock moving
+      - order becomes a source for `fulfil` and `bill`
+    invariants:
+      - grand_total == sum(net_amount) + total_taxes
+      - sum(delivered_qty) <= sum(qty) at all times
+    reversal: {kind: cancel, restriction: "only while delivered_qty == 0 and billed_amt == 0"}
+
+  - id: fulfil
+    summary: Ship goods. Moves stock and cost, not revenue.
+    maps_to: {doctype: Delivery Note, submittable: true, posts_gl: true, posts_stock: true}
+    preconditions:
+      - customer exists and is not disabled
+      - every item is a stock item with sufficient qty in the source warehouse
+      - source warehouse belongs to the document company
+    derives: [price_list_rate, rate, conversion_factor, stock_uom, warehouse, amount, incoming_rate]
+    postconditions:
+      - "stock ledger: qty leaves the source warehouse"
+      - "GL: Dr Cost of Goods Sold, Cr Stock In Hand (valuation, not selling price)"
+      - "linked Sales Order delivered_qty increases"
+    invariants:
+      - debits == credits
+      - "stock ledger qty x valuation == Stock In Hand GL balance"
+      - COGS posted uses valuation rate, never selling rate
+    reversal: {kind: cancel, restriction: "only while not billed", note: "Reverses the stock ledger and the GL entries."}
+
+  - id: bill
+    summary: Recognise revenue and create a receivable.
+    maps_to: {doctype: Sales Invoice, submittable: true, posts_gl: true, posts_stock: conditional}
+    preconditions:
+      - customer exists and is not disabled
+      - company has a default receivable account
+      - due_date is on or after posting_date
+      - posting_date falls in an open fiscal period
+    derives: [price_list_rate, rate, income_account, item_tax_template, conversion_factor, amount, net_rate, net_amount]
+    postconditions:
+      - "GL: Dr Debtors, Cr Sales, Cr tax liability"
+      - accounts receivable rises by grand_total
+      - "tax liability exists from this moment, independent of collection"
+      - "if update_stock is set, the stock ledger moves too"
+    invariants:
+      - debits == credits
+      - grand_total == sum(net_amount) + total_taxes
+      - AR subledger for the customer ties to the Debtors control account
+    reversal: {kind: credit_note, restriction: "cancel only while unpaid; otherwise issue a return", note: "A paid invoice is reversed by a credit note, never by cancellation."}
+
+  - id: collect
+    summary: Receive money against receivables.
+    maps_to: {doctype: Payment Entry, submittable: true, posts_gl: true, posts_stock: false}
+    preconditions:
+      - paid_to account is Bank or Cash, is not a group account, belongs to the company
+      - party has outstanding allocable to the payment
+      - allocated total does not exceed paid_amount
+    derives: [paid_from, paid_from_account_currency, paid_to_account_currency, exchange rates, references.outstanding_amount]
+    postconditions:
+      - "GL: Dr Bank/Cash, Cr Debtors"
+      - referenced invoices' outstanding falls by the allocated amount
+      - invoice status moves to Paid or Partly Paid
+    invariants:
+      - debits == credits
+      - sum(allocated) <= paid_amount
+      - no invoice's outstanding goes below zero
+      - unallocated amount stays visible as an advance, never silently absorbed
+    reversal: {kind: cancel, restriction: "restores outstanding on every referenced invoice"}
+
+  - id: source
+    summary: Request goods internally. Commits nothing, triggers procurement.
+    maps_to: {doctype: Material Request, submittable: true, posts_gl: false, posts_stock: false}
+    preconditions:
+      - schedule_date is on or after transaction_date
+      - every item exists and is not disabled
+    derives: [price_list_rate, rate, conversion_factor, stock_uom, min_order_qty]
+    refuse:
+      - field: min_order_qty
+        evidence: "census: silently_accepted on Material Request; read_only on material_request_item"
+        reason: "Item master property. A caller-supplied value hides the real reorder constraint."
+    postconditions:
+      - no ledger movement
+      - becomes a source for `procure`
+    invariants: []
+    reversal: {kind: cancel, restriction: "only while not ordered"}
+
+  - id: procure
+    summary: Place a purchase order. A commitment, not a transaction.
+    maps_to: {doctype: Purchase Order, submittable: true, posts_gl: false, posts_stock: false}
+    preconditions:
+      - supplier exists and is not disabled and is not blocked
+      - schedule_date is on or after transaction_date
+      - a price is resolvable from the buying price list
+    derives: [price_list_rate, rate, conversion_factor, stock_uom, item_tax_template, amount, last_purchase_rate]
+    postconditions:
+      - no ledger movement
+      - quantity is on order; reorder logic sees it as incoming
+    invariants:
+      - grand_total == sum(net_amount) + total_taxes
+      - sum(received_qty) <= sum(qty)
+    reversal: {kind: cancel, restriction: "only while received_qty == 0 and billed_qty == 0"}
+
+  - id: receive
+    summary: Take goods into stock. Creates an asset and an accrual.
+    maps_to: {doctype: Purchase Receipt, submittable: true, posts_gl: true, posts_stock: true}
+    preconditions:
+      - supplier exists, is not disabled, is not blocked
+      - target warehouse belongs to the company and is not a group
+      - every item is a stock item
+    derives: [price_list_rate, rate, conversion_factor, stock_uom, valuation_rate, amount]
+    postconditions:
+      - "stock ledger: qty enters the target warehouse at valuation rate"
+      - "GL: Dr Stock In Hand, Cr Stock Received But Not Billed"
+      - "linked Purchase Order received_qty increases"
+    invariants:
+      - debits == credits
+      - "stock ledger qty x valuation == Stock In Hand GL balance"
+      - "GRNI balance equals goods received and not yet invoiced"
+    reversal: {kind: cancel, restriction: "only while not billed and the received stock has not been consumed"}
+
+  - id: expense
+    summary: Record a supplier bill. Converts an accrual into a payable.
+    maps_to: {doctype: Purchase Invoice, submittable: true, posts_gl: true, posts_stock: conditional}
+    preconditions:
+      - supplier exists, is not disabled, is not blocked
+      - bill_no is present and not a duplicate for this supplier
+      - posting_date falls in an open fiscal period
+    derives: [price_list_rate, rate, expense_account, item_tax_template, conversion_factor, amount, tax_withholding_category]
+    postconditions:
+      - "GL: Dr Stock Received But Not Billed (or Expense), Cr Creditors"
+      - accounts payable rises by grand_total
+      - "input tax credit is recognised where applicable"
+    invariants:
+      - debits == credits
+      - AP subledger for the supplier ties to the Creditors control account
+      - "GRNI nets to zero once every receipt is billed"
+    reversal: {kind: debit_note, restriction: "cancel only while unpaid"}
+
+  - id: pay
+    summary: Send money against payables.
+    maps_to: {doctype: Payment Entry, submittable: true, posts_gl: true, posts_stock: false}
+    preconditions:
+      - paid_from account is Bank or Cash, is not a group account, belongs to the company
+      - supplier is not blocked for payment
+      - allocated total does not exceed paid_amount
+    derives: [paid_to, account currencies, exchange rates, references.outstanding_amount]
+    postconditions:
+      - "GL: Dr Creditors, Cr Bank/Cash"
+      - referenced bills' outstanding falls by the allocated amount
+    invariants:
+      - debits == credits
+      - sum(allocated) <= paid_amount
+      - no bill's outstanding goes below zero
+    reversal: {kind: cancel, restriction: "restores outstanding on every referenced bill"}
+
+  - id: return
+    summary: Reverse a completed sale or purchase after the fact.
+    maps_to: {doctype: Sales Invoice, submittable: true, posts_gl: true, posts_stock: conditional}
+    variant: {is_return: 1, return_against: required}
+    preconditions:
+      - return_against names a submitted, uncancelled document
+      - returned qty does not exceed the qty on the original, less prior returns
+    derives: [rate from the original document, income_account, item_tax_template]
+    refuse:
+      - field: rate
+        evidence: "business rule, not census"
+        reason: >
+          A return reverses an agreed transaction. Its rate is the original
+          rate. Allowing a different one lets a return silently reprice
+          history, which is the one place an override must never be offered.
+    postconditions:
+      - "GL: the original entries, reversed, in proportion to the returned qty"
+      - the original invoice's outstanding falls
+      - "stock returns to the warehouse if the original moved stock"
+    invariants:
+      - debits == credits
+      - cumulative returned qty never exceeds original qty
+      - a return never posts at a rate different from its source
+    reversal: {kind: cancel, restriction: none}

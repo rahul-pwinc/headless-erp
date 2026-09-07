@@ -123,6 +123,36 @@ Stated explicitly so nothing here is read as more than it is.
 - **The 484 `set_query` filters.** ERPNext client scripts contain 484 `set_query`/`get_query` calls constraining which linked records are selectable. Whether each has a server-side backstop is **unmeasured**. Do not assume they don't.
 - **Public MCP servers.** Several public MCP servers wrap this REST API for AI agents. Whether any specific one exhibits this gap has **not been tested here.** The architectural argument suggests they inherit it; that is a hypothesis, not a result.
 
+## Phases 3 and 4 — the intent layer
+
+`intents/catalog.yaml` declares 11 business intents (`quote`, `sell`, `fulfil`, `bill`, `collect`, `source`, `procure`, `receive`, `expense`, `pay`, `return`) with 27 invariants. It deliberately does not restate DocType structure, which is already introspectable. It adds what metadata does not carry: preconditions, what the system derives, what it refuses, what holds afterwards, and how each is reversed.
+
+The refuse/override split is not a taste call. It falls out of the census:
+
+| census result | contract | why |
+|---|---|---|
+| accepted **and** read-only in the UI | **refuse** | no Desk session could set it, so no caller may |
+| accepted **and** editable in the UI | **override** | a human may do it deliberately, so a caller may, but not silently |
+| recomputed server-side regardless | derive | never accepted |
+
+`harness/intent.py` enforces it. Every intent derives from the server first, then applies declared overrides on top of the derived value, recording the delta.
+
+```
+7/7 cases behaved as specified
+
+PASS  1. clean bill(): derives the list price, no caller input
+        ACC-SINV-2026-00034  grand_total=1000.0  overrides=0  invariants=2 failures=0
+PASS  2. bill() with price_list_rate supplied  ->  REFUSED (read-only in the UI)
+PASS  3. bill() with rate smuggled into the line  ->  REFUSED (must be a declared override)
+PASS  4. bill() override with no reason  ->  REFUSED
+PASS  5. bill() override WITH a reason  ->  allowed, recorded, still consistent
+        recorded: rate 250.0 -> 1.0 :: goodwill credit, approved by finance
+PASS  6. bill() override of a derived-only field  ->  REFUSED
+PASS  7. return with a rate override  ->  REFUSED (intent-level refuse beats the default)
+```
+
+Case 5 is the point. The same 4.00 invoice ERPNext accepted in silence is still reachable, because sometimes a business genuinely does discount 99.6%. What changed is that it now carries what the price should have been, that someone overrode it, and why. Case 7 shows an intent can be stricter than the default: a return reprices history, so it gets no override path at all.
+
 ## Run it
 
 ```bash

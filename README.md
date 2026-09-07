@@ -285,13 +285,26 @@ separately, flagging `DRIFT` when the last two disagree
 
 | what | result | artifact |
 |---|---|---|
-| contract cases | **10 / 10** | `reports/intent_proof.json` |
-| accounting corpus | **39 / 39** across 7 categories | `reports/corpus.json` |
-| enforcement boundary | **8 / 8** | `reports/boundary.json` |
-| derivation census | 203 probes, 156 protected, 37 accepted, 10 rejected; 7 fields accepted across 9 doctypes | `reports/census.json` |
+| contract cases | **10 / 10** | `reports/clean/intent_proof.json` |
+| accounting corpus | **48 / 50** across 9 categories | `reports/clean/corpus.json` |
+| enforcement boundary | **8 / 8** | `reports/clean/boundary.json` |
+| derivation census | 203 probes, 150 protected, 43 accepted, 10 rejected; 7 fields across 9 doctypes | `reports/clean/census.json` |
 | differential | 0 gaps when `rate` is omitted, 3 when asserted (1,000.00 vs 4.00) | `reports/latest.json` |
 | replay at scale | 1,000 real invoices written twice, 4,380 lines, 1,091 overrides recorded, 0 invariant failures | `reports/simulation.json` |
-| trial balance | 8,346 entries, 717,378.18 both sides, difference 0.00 | `reports/trial_balance.json` |
+| trial balance | guaranteed balanced by construction, therefore uninformative | `reports/trial_balance.json` |
+
+Everything in `reports/clean/` comes from one run against a site created for the
+purpose, not from the long-lived instance this was developed on. That
+distinction matters: an earlier version of these numbers was measured on an
+instance four agents had been writing to, and the census moved when it was
+re-run clean.
+
+**The two corpus failures are deliberate.** `srv-01` and `srv-02` use a raw path
+that bypasses the contract on purpose, to document what ERPNext does natively: a
+caller-supplied `conversion_factor` putting 49 in the stock ledger instead of
+70, and a naive write creating a master `Item Price` from an invented rate.
+Neither is reachable through the contract. They stay failing because they are
+findings, not defects to tune away.
 
 Read the census figures with the caveat above: the 203 is a small field set
 multiplied across doctypes, most "protected" verdicts are arithmetic the server

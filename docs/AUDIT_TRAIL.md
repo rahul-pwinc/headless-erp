@@ -886,6 +886,42 @@ document and disables it again in a `finally`, even if the call raises. The rule
 is global metadata on a shared site — while it is on, every Sales Invoice anyone
 creates is repriced — so it is never left enabled.
 
+### What the suites leave behind
+
+The three suites are not audit demos — they test the contract. The records below
+are a *byproduct* of running them, which is the point: the log fills up because
+the real code path writes to it, not because a demo script was pointed at it.
+Log emptied first, then the three suites run in order, then queried:
+
+```
+  DATE       TARGET                       ROW  FIELD        DERIVED   REQUESTED    STORED  EFF.DELTA  DRIFT      STATE     ACTOR                     REASON
+  ---------------------------------------------------------------------------------------------------------------------------------------------------------
+  2026-09-08 SA ACC-SINV-2026-03312         0  rate          250.00        1.00      1.00    -249.00  none       submitted harness:prove_intent.py   goodwill credit, approved by finance
+  2026-09-08 SA ACC-SINV-2026-03326         0  rate          250.00        1.00      1.00    -249.00  none       submitted harness:run_corpus.py     goodwill credit approved by finance
+  2026-09-08 SA ACC-SINV-2026-03327         0  rate          250.00      200.00    200.00     -50.00  none       submitted harness:run_corpus.py     volume deal
+  2026-09-08 SA ACC-SINV-2026-03336         0  rate          250.00        1.00      1.00    -249.00  none       draft     endpoint:bill_intent      goodwill, approved by finance
+
+  by actor:
+    endpoint:bill_intent      Agent   none      n=1   net_delta=-249.00
+    harness:prove_intent.py   Agent   none      n=1   net_delta=-249.00
+    harness:run_corpus.py     Agent   none      n=2   net_delta=-299.00
+
+  by field:
+    rate    Sales Invoice   none      n=4   net_eff_delta=-797.00
+
+  verify_chain: {'records': 4, 'tampered': 0, 'broken': 0, 'forked': 0,
+                 'unsubmitted': 0, 'unverifiable_schema': 0, 'ok': True}
+```
+
+Three actors, two write paths, one chain. `harness:prove_intent.py` and
+`harness:run_corpus.py` came through the library path; `endpoint:bill_intent`
+came from inside RestrictedPython. Note that the endpoint's row is `draft` and
+the library rows are `submitted` — the asymmetry described at the end of §10.
+
+Four records for 68 checks across three suites (10 + 50 + 8) is the right order of
+magnitude, and worth reading correctly: only `rate` can produce a record (§2b),
+and most scenarios test refusals, which produce none because nothing happened.
+
 `--reset` cancels and deletes every log record and drops the DocType. It is a
 development affordance, and it is also §7.3 made concrete: an Administrator can
 destroy this trail with four API calls, and nothing inside ERPNext can stop

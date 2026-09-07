@@ -1,0 +1,13 @@
+ERPNext v16.34.1 — GL entries for the same business intent, two paths
+Intent: 4 units of HL-WIDGET-001, Standard Selling price list rate 250.00
+
+=== UI-derivation path: ACC-SINV-2026-00007 ===
+  Debtors - HTC                            Dr    1000.00  Cr       0.00
+  Sales - HTC                              Dr       0.00  Cr    1000.00
+  TOTAL                                    Dr    1000.00  Cr    1000.00   balanced=True
+
+=== Naive API path: ACC-SINV-2026-00008 ===
+  Debtors - HTC                            Dr       4.00  Cr       0.00
+  Sales - HTC                              Dr       0.00  Cr       4.00
+  TOTAL                                    Dr       4.00  Cr       4.00   balanced=True
+

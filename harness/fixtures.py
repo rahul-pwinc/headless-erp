@@ -1,0 +1,113 @@
+"""Idempotent master data for the differential harness.
+
+A fresh ERPNext site has no Company and no Chart of Accounts until the setup
+wizard runs, so we complete it over the same API a client would use.
+"""
+from __future__ import annotations
+
+from client import FrappeClient, FrappeError
+
+COMPANY = "Headless Test Co"
+ABBR = "HTC"
+CURRENCY = "INR"
+PRICE_LIST = "Standard Selling"
+ITEM_CODE = "HL-WIDGET-001"
+ITEM_GROUP = "Products"
+LIST_PRICE = 250.0          # the Price List rate the UI would derive
+CUSTOMER = "Headless Test Customer"
+
+
+def ensure_setup(client: FrappeClient) -> None:
+    """Run the setup wizard once. Safe to call repeatedly."""
+    companies = client.call(
+        "frappe.client.get_list", doctype="Company", fields=["name"], limit_page_length=0
+    ) or []
+    if companies:
+        print(f"  setup: already complete (company={companies[0]['name']})")
+        return
+    print("  setup: running setup wizard (this takes ~60s)...")
+    client.call(
+        "frappe.desk.page.setup_wizard.setup_wizard.setup_complete",
+        args={
+            "language": "English (United States)",
+            "country": "India",
+            "timezone": "Asia/Kolkata",
+            "currency": CURRENCY,
+            "company_name": COMPANY,
+            "company_abbr": ABBR,
+            "chart_of_accounts": "Standard",
+            "fy_start_date": "2026-04-01",
+            "fy_end_date": "2027-03-31",
+        },
+    )
+    print("  setup: done")
+
+
+def ensure_item(client: FrappeClient) -> None:
+    if client.exists("Item", ITEM_CODE):
+        print(f"  item: {ITEM_CODE} exists")
+    else:
+        client.insert(
+            {
+                "doctype": "Item",
+                "item_code": ITEM_CODE,
+                "item_name": "Headless Widget",
+                "item_group": ITEM_GROUP,
+                "stock_uom": "Nos",
+                "is_stock_item": 0,   # service item: no stock ledger needed for SI
+                "description": "Fixture item for the differential harness.",
+            }
+        )
+        print(f"  item: created {ITEM_CODE}")
+
+    existing = client.call(
+        "frappe.client.get_list",
+        doctype="Item Price",
+        filters={"item_code": ITEM_CODE, "price_list": PRICE_LIST},
+        fields=["name", "price_list_rate"],
+        limit_page_length=0,
+    ) or []
+    if existing:
+        print(f"  price:  {PRICE_LIST} = {existing[0]['price_list_rate']} (exists)")
+    else:
+        client.insert(
+            {
+                "doctype": "Item Price",
+                "item_code": ITEM_CODE,
+                "price_list": PRICE_LIST,
+                "price_list_rate": LIST_PRICE,
+            }
+        )
+        print(f"  price:  {PRICE_LIST} = {LIST_PRICE} (created)")
+
+
+def ensure_customer(client: FrappeClient) -> None:
+    if client.exists("Customer", CUSTOMER):
+        print(f"  customer: {CUSTOMER} exists")
+        return
+    client.insert(
+        {
+            "doctype": "Customer",
+            "customer_name": CUSTOMER,
+            "customer_type": "Company",
+        }
+    )
+    print(f"  customer: created {CUSTOMER}")
+
+
+def ensure_all(client: FrappeClient) -> dict:
+    print("fixtures:")
+    ensure_setup(client)
+    ensure_item(client)
+    ensure_customer(client)
+    company = (
+        client.call("frappe.client.get_list", doctype="Company", fields=["name"], limit_page_length=0)
+        or [{"name": COMPANY}]
+    )[0]["name"]
+    return {
+        "company": company,
+        "item_code": ITEM_CODE,
+        "customer": CUSTOMER,
+        "price_list": PRICE_LIST,
+        "list_price": LIST_PRICE,
+    }

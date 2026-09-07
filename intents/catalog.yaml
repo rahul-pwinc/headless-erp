@@ -39,6 +39,33 @@ defaults:
     - field: discount_percentage
       evidence: "census: silently_accepted on 8/9"
       reason: "Same as discount_amount."
+    - field: conversion_rate
+      evidence: "derivation_map.md finding 1 [live ACC-SINV-2026-02896]: omitted -> server derives 94.46 from Currency Exchange; asserted 1.0 -> stored 1.0, and a 1,000 USD invoice posts 1,000 instead of 94,460, balanced"
+      reason: >
+        The exchange rate on a date is a published fact, not a commercial
+        judgment. There is no legitimate reason for a caller to assert it, and
+        asserting it wrong understates revenue and receivables by the ratio of
+        the true rate to the asserted one. Unlike a price, this has no
+        defensible override case, so there is none.
+    - field: plc_conversion_rate
+      evidence: "same mechanism as conversion_rate, price-list side"
+      reason: "As conversion_rate. The price list's own currency conversion is a fact."
+    - field: conversion_factor
+      evidence: "derivation_map.md finding 7 [live ACC-SINV-2026-02314]: master Box = 10, caller sent 7, stock_qty stored 28 instead of 40"
+      reason: >
+        The UOM conversion belongs to the item master. A caller-supplied factor
+        moves stock ledger quantities, so the warehouse and the books disagree
+        about physical goods. That is worse than a monetary error because it
+        cannot be corrected with a journal entry.
+    - field: income_account
+      evidence: "derivation_map.md finding 6 [live ACC-SINV-2026-02356]: server derives Sales; caller's Interest Income survives"
+      reason: >
+        Which account revenue posts to is determined by the item and company
+        setup, not by the caller. A caller-supplied account books revenue
+        somewhere it does not belong while the ledger still balances.
+    - field: expense_account
+      evidence: "derivation_map.md finding 6 [live ACC-PINV-2026-00062]"
+      reason: "As income_account, on the buying side."
   override:
     - field: rate
       evidence: "census: silently_accepted on 8/9; editable on 9/9 child doctypes"

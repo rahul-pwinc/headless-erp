@@ -10,13 +10,24 @@ args = frappe.form_dict
 items = args.get("items") or []
 overrides = args.get("overrides") or []
 price_list = args.get("selling_price_list") or "Standard Selling"
-REFUSED = ["price_list_rate", "discount_amount", "discount_percentage", "weight_per_unit"]
+REFUSED_LINE = ["price_list_rate", "discount_amount", "discount_percentage",
+                "weight_per_unit", "conversion_factor", "income_account", "expense_account"]
+# Header-level refusals. conversion_rate is the highest-impact field in the
+# contract: assert 1.0 on a USD invoice and it posts at 1/94th of its value,
+# balanced. An exchange rate is a published fact, so there is no override case.
+REFUSED_HEADER = ["conversion_rate", "plc_conversion_rate"]
+
+for f in REFUSED_HEADER:
+    if args.get(f) is not None:
+        frappe.throw("may not supply " + f
+                     + ": the exchange rate on a date is a published fact, not a "
+                     + "commercial decision. Omit it and the server will derive it.")
 
 rows = []
 intents = []
 idx = 0
 for it in items:
-    for f in REFUSED:
+    for f in REFUSED_LINE:
         if f in it:
             frappe.throw("line " + str(idx) + " may not supply " + f
                          + ": it is derived, and read-only in the Desk UI")

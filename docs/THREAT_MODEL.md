@@ -149,7 +149,8 @@ depends on the client library behaving.
    **That last omission is a live hole**: the endpoint accepts any customer and
    any company the caller names.
 
-**Wire-level detection is still impossible for the client engine.** Even a
+**A request from the client engine cannot be told apart from a naive one.** This
+is a separate point from the retracted detection claim (R5) and it holds. Even a
 server-side observer cannot tell an `intent.py` write from a naive one.
 `harness/intent.py:221` copies every non-null field returned by
 `get_item_details` into the row it POSTs, including `price_list_rate`, so the

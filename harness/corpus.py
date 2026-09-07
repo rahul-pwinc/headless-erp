@@ -58,8 +58,8 @@ class CorpusRunner:
     def _header(self, intent_id: str, extra: dict | None = None) -> dict:
         sell = {"customer": self.fx["customer"], "selling_price_list": self.fx["price_list"]}
         buy = {"supplier": self.fx["supplier"], "buying_price_list": self.fx["buy_price_list"]}
-        base = {"company": self.fx["company"], "currency": "INR", "conversion_rate": 1,
-                "price_list_currency": "INR", "plc_conversion_rate": 1,
+        base = {"company": self.fx["company"], "currency": "INR",
+                "price_list_currency": "INR",
                 "posting_date": "2026-09-07", "transaction_date": "2026-09-07"}
         if intent_id in ("quote", "sell", "fulfil", "bill", "return"):
             base.update(sell)

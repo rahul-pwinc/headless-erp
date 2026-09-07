@@ -37,9 +37,8 @@ def main() -> int:
     c = FrappeClient(os.environ.get("ERPNEXT_URL", "http://localhost:8080"), "Administrator", "admin")
     fx = ensure_all(c)
     eng = IntentEngine(c)
-    hdr = {"customer": fx["customer"], "company": fx["company"], "currency": "INR",
-           "conversion_rate": 1, "selling_price_list": fx["price_list"],
-           "price_list_currency": "INR", "plc_conversion_rate": 1,
+    hdr = {"customer": fx["customer"], "company": fx["company"], "currency": "INR", "selling_price_list": fx["price_list"],
+           "price_list_currency": "INR",
            "posting_date": TODAY, "due_date": LATER, "update_stock": 0}
     line = [{"item_code": fx["item_code"], "qty": 4}]
     print(f"\nlist price = {fx['list_price']}, qty 4  ->  a correct invoice is {fx['list_price']*4}\n")
@@ -67,7 +66,16 @@ def main() -> int:
          lambda: eng.execute("bill", hdr, line,
                              overrides=[{"field": "net_amount", "value": 1.0, "reason": "x"}]), True)
 
-    case(7, "return with a rate override  ->  REFUSED (intent-level refuse beats the default)",
+    case(7, "bill() with conversion_rate asserted  ->  REFUSED (the headline finding, closed)",
+         lambda: eng.execute("bill", {**hdr, "currency": "USD", "conversion_rate": 1.0}, line), True)
+
+    case(8, "bill() with a caller-supplied income_account  ->  REFUSED",
+         lambda: eng.execute("bill", hdr, [{**line[0], "income_account": "Interest Income - HTC"}]), True)
+
+    case(9, "bill() with a caller-supplied conversion_factor  ->  REFUSED (moves stock, not just money)",
+         lambda: eng.execute("bill", hdr, [{**line[0], "conversion_factor": 7}]), True)
+
+    case(10, "return with a rate override  ->  REFUSED (intent-level refuse beats the default)",
          lambda: eng.execute("return", {**hdr, "is_return": 1}, line,
                              overrides=[{"field": "rate", "value": 99.0, "reason": "renegotiated"}]), True)
 

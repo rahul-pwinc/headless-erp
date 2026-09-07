@@ -175,7 +175,19 @@ class IntentEngine:
         overridable = self._overridable(spec)
         res = IntentResult(intent=intent_id, doctype=doctype)
 
-        # 1. A refused field in the payload is an error, never a silent accept.
+        # 1a. Refused HEADER fields. conversion_rate and friends live on the
+        # parent, not on item rows, so checking rows alone missed the single
+        # highest-impact field in the whole contract.
+        for fname in header:
+            if fname in refused:
+                r = refused[fname]
+                raise IntentRefused(
+                    f"{intent_id}: header may not supply {fname!r}.\n"
+                    f"  reason:   {r['reason'].strip()}\n"
+                    f"  evidence: {r.get('evidence', 'n/a')}"
+                )
+
+        # 1b. A refused field in a line is an error, never a silent accept.
         for idx, line in enumerate(lines):
             for fname in line:
                 if fname in refused:

@@ -92,13 +92,22 @@ marked `allow_on_submit`** — not even a status field. Verified live:
 
 ```
   edit the reason           -> refused: UpdateAfterSubmitError: Not allowed to change Reason after submission
-  edit the supplied value   -> refused: UpdateAfterSubmitError: Not allowed to change Supplied Value after submission
+  edit the stored value     -> refused: UpdateAfterSubmitError: Not allowed to change Stored (numeric) after submission
+  edit the drift flag       -> refused: UpdateAfterSubmitError: Not allowed to change Drift after submission
   DELETE the record         -> refused [417]: Submitted Record cannot be deleted. You must Cancel it first.
 ```
 
-The same three refusals apply to a raw `PUT /api/resource/Intent Override
+The same refusals apply to a raw `PUT /api/resource/Intent Override
 Log/<name>`; `frappe.client.save` and the REST verbs run through the same model
 code.
+
+One trap in writing that test: Frappe compares against the stored value, so
+re-saving a field with the value it already holds is a no-op that succeeds. The
+first version of the drift-flag check set `drift` to `"none"` on a record that
+was already `"none"` and reported *"ACCEPTED — the record is NOT immutable"*.
+The record was fine; the test was wrong. It now always writes a value that
+differs from what is there.
+
 
 A consequence worth naming: because nothing is `allow_on_submit`, the record
 cannot carry a lifecycle *status*. "This override's document was later
@@ -378,6 +387,34 @@ n. Use dict syntax like {'COUNT': '*'} instead."* — so the aggregates go throu
 the dict form, and `_normalise_agg` maps the backend's column naming
 (`count(name)`, `` count(`name`) ``, …) onto stable keys.
 
+### The question the two-column schema could not be asked
+
+> *show me every override that did not actually take effect*
+
+```python
+audit.overrides_with_drift(client, "2026-09-01", "2026-09-30")
+```
+
+```
+  DATE       TARGET                       ROW  FIELD        DERIVED   REQUESTED    STORED  EFF.DELTA  DRIFT      STATE     ACTOR                     REASON
+  ---------------------------------------------------------------------------------------------------------------------------------------------------------
+  2026-09-08 SA ACC-SINV-2026-02962         0  rate          250.00        1.00    225.00     -25.00  changed    submitted agent:pricing-bot@1.4     goodwill credit, approved by finance
+               !! the saved document holds 225.0 where 1.0 was requested (delta +224). Another ERPNext mechanism — a Pricing Rule, a tax or currency rule, or a server hook — overrode the recorded decision after the intent layer applied it.
+
+  by drift state:
+    changed       n=1    net_drift=224.00
+    none          n=6    net_drift=0.00
+```
+
+`drift` is an indexed `Select`, so this is an index seek rather than a scan, and
+it composes with every other filter — `overrides_in_period(..., drift="changed")`
+narrows the period query the same way.
+
+`include_unverified` defaults to `True`. A record where the field could not be
+read back is not evidence of drift, but it is evidence that no assessment was
+possible, and an auditor should see it rather than have it quietly counted as
+clean.
+
 ---
 
 ## 5. The docstatus lifecycle
@@ -478,42 +515,68 @@ from a controlled list of codes with rules attached, or a threshold above which
 the intent layer refuses to proceed without a countersignature. Those are policy
 mechanisms. This is the substrate they would sit on.
 
-### 7.2 It does not stop a caller bypassing the intent layer
+### 7.2 It binds only the identities you deliberately constrain
 
-This is the largest gap and it should be stated plainly: **`harness/intent.py`
-is a client-side convention.** Any caller with the same credentials can skip it
-entirely and `POST /api/resource/Sales Invoice` with `rate` set to whatever it
-likes. ERPNext accepts that — Phase 2's census is a catalogue of exactly which
-fields it accepts silently — and no record is written, because the thing that
-writes records is the layer that was skipped. The audit trail is complete with
-respect to overrides that went through the intent layer, and blind to everything
-else. Any claim it makes about "every override in the period" carries that
-asterisk.
+This section was written before `harness/enforce.py` existed, when the honest
+answer was "nothing stops a bypass." Half of that has since been fixed, and the
+other half has not. Both halves matter.
 
-Closing it needs a *server-side* boundary. Frappe has one, and it is the right
-tool: **field permission levels**.
+**What now holds.** `harness/enforce.py` provisions a real server-side boundary:
+a role (`Agent Writer`) with read-only permission on 24 master doctypes and
+**no write permission on any transaction doctype**, a user bound to it, and a
+Frappe Server Script API endpoint (`bill_intent`) that runs with elevated
+permission and enforces derive-or-refuse server-side. For that identity, the
+intent layer is not advice — it is the only door. Verified by
+`harness/prove_boundary.py`, 8/8, re-run for this document:
 
-A `DocField` with `permlevel > 0` is writable only by a role holding `write` at
-that permlevel. Enforcement is in
-`frappe/model/document.py::validate_higher_perm_levels` →
+```
+1. direct write, unconstrained identity
+   Administrator POST /api/resource -> ALLOWED ACC-SINV-2026-02954 at rate 1.0
+
+2. direct write, constrained identity
+   agent POST /api/resource -> 403 BLOCKED, boundary holds
+
+3. constrained identity through the enforced endpoint
+   ok   clean call derives the list price
+   ok   caller supplies rate                 refused: ... Declare it as an override with a reason.
+   ok   caller supplies price_list_rate      refused: ... derived, and read-only in the Desk UI
+   ok   override without a reason            refused: override of rate on line 0 requires a reason
+   ok   override with a reason               ACC-SINV-2026-02956 list=250.0 requested=1.0 stored=1.0
+   ok   item with no resolvable price        refused: ... Refusing to guess a rate.
+```
+
+This is a genuine control, and it is stronger than the permlevel approach
+sketched below because the refusal is *loud*: the caller gets an error naming
+the field and the rule, not a `200` and a quietly different document.
+
+**What does not hold.** The boundary binds one identity. It is a property of
+the `Agent Writer` role, not of the Sales Invoice doctype. Anyone holding a
+normal ERPNext role — `Accounts User`, `Sales User`, `System Manager`, any
+existing integration's API key, every human at the Desk — still writes directly
+to `/api/resource/Sales Invoice` with whatever `rate` they like, and no record
+is written, because the thing that writes records is the layer they skipped.
+
+So the honest scope of any claim this log makes is: **complete for constrained
+identities, blind for everyone else.** "Every override in the period" means
+"every override by an identity you deliberately fenced." On a real ERP with
+forty users and six integrations, that is a minority of the write traffic until
+someone does the work of constraining each one — and that work is organisational,
+not technical.
+
+Closing the rest needs the boundary to attach to the *field* rather than to the
+role. Frappe has that too: **field permission levels**. A `DocField` with
+`permlevel > 0` is writable only by a role holding `write` at that permlevel.
+Enforcement is in `frappe/model/document.py::validate_higher_perm_levels` →
 `frappe/model/base_document.py::reset_values_if_no_permlevel_access`, called
 from `Document.insert` (`document.py:483`) and `Document.save`
-(`document.py:592`) — i.e. on every write path, including the REST API. For a
-new document, offending fields are reset to their default; for an existing one,
-to their stored value.
+(`document.py:592`) — every write path, including the REST API. For a new
+document, offending fields are reset to their default.
 
-Applied here, the deployment would be:
-
-1. `Property Setter` on `Sales Invoice Item.rate` (and the equivalent child
-   field on each of the other eight doctypes) setting `permlevel = 1`.
-2. A role — say `Pricing Override Approver` — granted `write` at permlevel 1.
-3. The agent's service account gets a role with permlevel-0 access only.
-4. The intent layer runs under an identity that *does* hold permlevel 1, so a
-   declared, reasoned override still works.
-
-Then an agent that skips the intent layer and POSTs `rate` directly does not get
-a mispriced invoice; it gets the list price, and the only path to an off-list
-rate is the path that writes a record.
+The deployment would be a `Property Setter` on `Sales Invoice Item.rate` (and
+the equivalent child field on the other eight doctypes) setting `permlevel = 1`,
+with `write` at permlevel 1 granted only to the identity the intent endpoint
+runs as. Then *every* caller that sets `rate` directly gets the list price
+instead, regardless of what role they hold.
 
 **Verified on this instance** (`python harness/demo_audit.py --boundary`), on a
 scratch DocType with a permlevel-1 field:
@@ -528,18 +591,19 @@ Two caveats the proof itself surfaces:
 - **The write is silently discarded, not refused.** The caller gets a `200` and
   a document that quietly disagrees with what it sent. That is a worse failure
   mode than an error, and it is the same class of silence this whole repository
-  is about. Making it loud needs a `validate` hook — a Frappe Server Script on
-  each doctype — that rejects `rate != price_list_rate` unless a matching log
-  record exists for the document being saved.
+  is about — which is why `enforce.py`'s endpoint-shaped boundary is the better
+  primary control and permlevel is the backstop behind it. Making permlevel loud
+  needs a `validate` hook that rejects `rate != price_list_rate` without a
+  matching log record.
 - **Administrator bypasses permlevel entirely** (`document.py:1026`:
   `if frappe.session.user == "Administrator": return`). Every script in this
   repository, including the demo, authenticates as Administrator, so the
-  boundary would be invisible to them. A real deployment gives every agent its
-  own non-Administrator service account; that is a prerequisite, not a detail.
+  boundary is invisible to them. A real deployment gives every agent its own
+  non-Administrator service account; that is a prerequisite, not a detail.
 
-The boundary was proved on a scratch DocType rather than on `Sales Invoice
+The permlevel proof used a scratch DocType rather than `Sales Invoice
 Item.rate` because a permlevel `Property Setter` on Sales Invoice is global,
-persistent metadata, and other processes were driving this instance at the time.
+persistent metadata and other processes were driving this instance at the time.
 The mechanism is identical; only the target differs.
 
 ### 7.3 It does not make the record undestroyable
@@ -590,6 +654,25 @@ is the honest conclusion: an ERP cannot certify its own logs.
 - **`actor` is self-asserted.** It is whatever string the caller passed to
   `record_result`. `actor_user` is the authenticated session and cannot be
   forged, so the pair is checkable — but only if someone checks it.
+- **`drift` detects that the decision was overridden, not by what.** The note
+  names the usual suspects (a Pricing Rule, a tax or currency rule, a server
+  hook) because the read-back cannot tell them apart: it sees the before and the
+  after, not the mechanism in between. Identifying the culprit means going to
+  the document's own `pricing_rules` table or Frappe's `Version` history.
+- **A drift-free record is not proof the field was never touched.** It means
+  the value that ended up stored equals the value requested. A rule that
+  computed its way back to the same number, or two mechanisms that cancelled,
+  read as `none`. The claim `drift: none` supports is "the books agree with the
+  recorded decision," not "nothing else ran."
+- **Numeric drift uses a half-cent tolerance.** ERPNext rounds to the
+  document's currency precision, so a 0.004 difference is rounding, not an
+  override being overridden. A real override smaller than half a cent would be
+  recorded as `none`.
+- **The read-back is one `GET` after submit, not a subscription.** If something
+  changes the document *after* `record_result` returns — an `allow_on_submit`
+  edit, a repost, a background job — the record still describes the state at
+  read time, and says nothing about the change. `recorded_at` is what bounds
+  the claim.
 
 ---
 
@@ -607,6 +690,8 @@ if submit and spec["maps_to"].get("submittable"):
     saved = self.client.submit(saved)
 res.name = saved.get("name")
 ...
+# AFTER submit, not after insert. record_result re-reads the document, and
+# a read taken before submit misses whatever the submit path changed.
 audit.record_result(self.client, res, actor=caller_identity)
 ```
 
@@ -618,22 +703,39 @@ if res.overrides:
 ```
 
 `record_result` is duck-typed on `.doctype`, `.name`, `.intent` and `.overrides`
-(each with `.fieldname`, `.derived_value`, `.supplied_value`, `.reason`,
-`.row_idx`) — the existing `IntentResult` and `Override` dataclasses already
-satisfy it, so no import from `intent.py` is needed and no cycle is created.
-`actor` is the one new thing the engine has to supply: the identity of whoever
-called it, which today it never learns.
+(each with `.fieldname`, `.derived_value`, `.reason`, `.row_idx`, and either
+`.requested_value` or the older `.supplied_value`) — the existing `IntentResult`
+and `Override` dataclasses already satisfy it, so no import from `intent.py` is
+needed and no cycle is created. `actor` is the one new thing the engine has to
+supply: the identity of whoever called it, which today it never learns.
+
+Note what the engine does **not** have to do: nothing about `stored_value` or
+`drift` is the caller's responsibility. `record_result` performs one `GET` of
+the saved document and derives both. That is deliberate — a writer that trusted
+its caller for `stored` would reintroduce the exact defect §2.3 describes.
+
+The same discipline is implemented server-side in
+`harness/server_scripts/bill_intent.py`, whose reconcile block compares
+`doc.items[i].rate` against the intended value after `doc.insert()` and flags
+the difference. Two implementations, one rule: **the record comes from the
+document.**
 
 ---
 
 ## 9. Reproducing
 
 ```bash
-python harness/demo_audit.py                        # write, query, immutability, chain
+python harness/demo_audit.py                        # write, drift, query, immutability, chain
 python harness/demo_audit.py --reset                # drop everything first, clean run
 python harness/demo_audit.py --tamper               # + raw-SQL tamper detection
 python harness/demo_audit.py --boundary             # + the permlevel boundary proof
+python harness/prove_boundary.py                    # the enforce.py boundary, 8/8
 ```
+
+The drift section (§2) enables Pricing Rule `PRLE-0001` for exactly one
+document and disables it again in a `finally`, even if the call raises. The rule
+is global metadata on a shared site — while it is on, every Sales Invoice anyone
+creates is repriced — so it is never left enabled.
 
 `--reset` cancels and deletes every log record and drops the DocType. It is a
 development affordance, and it is also §7.3 made concrete: an Administrator can

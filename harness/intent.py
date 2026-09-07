@@ -13,15 +13,27 @@ The contract, per intents/catalog.yaml:
 
 A caller that omits everything gets a correct document. A caller that lies gets
 an error, not a silently wrong invoice.
+
+Every accepted override is written to an `Intent Override Log` record — a
+standalone, submittable, hash-chained doctype (harness/audit.py) holding what
+the server derived, what the caller requested, and what the document actually
+stored. Only `rate` can produce one: the other nine fields in the contract are
+refused outright, so there is nothing to record about them beyond the refusal.
+
+If that record cannot be written, the document is undone and the call raises.
+See IntentEngine._record_overrides for why that is the right trade.
 """
 from __future__ import annotations
 
 import json
+import os
+import sys
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
 import yaml
 
+import audit
 from client import FrappeClient, FrappeError
 from oracle import build_ctx
 
@@ -30,13 +42,43 @@ class IntentRefused(Exception):
     """The caller asked for something the intent will not do."""
 
 
+class AuditWriteFailed(RuntimeError):
+    """The document was written but its override could not be recorded.
+
+    Raised only after the engine has tried to undo the document, so the message
+    also says whether that compensation succeeded. If it did not, the state
+    named in the message needs a human.
+    """
+
+
 @dataclass
 class Override:
+    """One declared override, and what became of it.
+
+    `requested_value` is what the caller asked for. `stored_value` is what the
+    saved document turned out to hold, and it is filled in only after the
+    document exists and has been read back — because ERPNext runs its own
+    machinery (Pricing Rules, tax and currency rules, hooks) during validate,
+    after this engine has set the field. See harness/audit.py for the incident
+    that made this a three-value record instead of a two-value one.
+    """
     fieldname: str
     derived_value: Any
-    supplied_value: Any
+    requested_value: Any
     reason: str
     row_idx: int = 0
+
+    # Filled after the audit write. None until then.
+    stored_value: Any = None
+    drift: str | None = None
+    record: str | None = None       # the Intent Override Log name
+
+    @property
+    def supplied_value(self) -> Any:
+        """Compatibility alias for the pre-drift name. `requested_value` is the
+        accurate one: what the caller supplied is not necessarily what the
+        document stored."""
+        return self.requested_value
 
 
 @dataclass
@@ -47,6 +89,9 @@ class IntentResult:
     docstatus: int | None = None
     grand_total: float | None = None
     overrides: list[Override] = field(default_factory=list)
+    # Names of the Intent Override Log records written for this document, so a
+    # caller can cite them without re-querying. Empty when nothing was overridden.
+    override_records: list[str] = field(default_factory=list)
     derived: dict = field(default_factory=dict)
     invariants_checked: list[str] = field(default_factory=list)
     invariant_failures: list[str] = field(default_factory=list)
@@ -57,12 +102,130 @@ class IntentResult:
         return d
 
 
+def _default_actor() -> str:
+    """Name the calling program, and do not pretend to know more than that.
+
+    The audit record distinguishes `actor` (what the caller says it is, which
+    it can lie about) from `actor_user` (the authenticated session, which it
+    cannot). With no identity passed in, the truthful `actor` is the script
+    that ran, not an invented service name.
+    """
+    prog = os.path.basename(sys.argv[0] or "")
+    return f"harness:{prog}" if prog else "intent-engine:unidentified"
+
+
 class IntentEngine:
-    def __init__(self, client: FrappeClient, catalog_path: str = "intents/catalog.yaml"):
+    def __init__(self, client: FrappeClient, catalog_path: str = "intents/catalog.yaml",
+                 actor: str | None = None, actor_kind: str = "Agent"):
         self.client = client
         self.catalog = yaml.safe_load(open(catalog_path))
         self.intents = {i["id"]: i for i in self.catalog["intents"]}
         self.defaults = self.catalog.get("defaults", {})
+        self.actor = actor or _default_actor()
+        self.actor_kind = actor_kind
+        self._audit_ready = False
+
+    # ---- the override record -------------------------------------------------
+
+    def _ensure_audit(self) -> None:
+        """Create the Intent Override Log doctype if this site has never seen
+        it. Lazy on purpose: an engine that never overrides anything should not
+        need write access to DocType."""
+        if not self._audit_ready:
+            audit.ensure_doctype(self.client, verbose=False)
+            self._audit_ready = True
+
+    def _record_overrides(self, res: IntentResult) -> None:
+        """Write the override records, and refuse to leave a document behind
+        that has an unrecorded override on it.
+
+        Why the document is undone rather than kept:
+
+        The tempting alternative is to log a warning and return the invoice —
+        the books balance either way, and the caller got what it asked for. But
+        the entire premise of this layer is that an off-list price is allowed
+        *because* it is recorded. An override that is not recorded is the exact
+        defect Phase 2 documented, arrived at by a different route: a document
+        priced away from the list with nothing anywhere saying who decided that
+        or why. Returning it successfully would mean the harness itself
+        produces the artefact it exists to prevent.
+
+        So on an audit failure the document is cancelled (or deleted, if it
+        never got past draft) and the caller gets an exception. A cancelled
+        Sales Invoice reverses its own GL entries, so the books are left where
+        they started. The compensation can itself fail — the network is down,
+        the document is already linked — and when it does, the exception says
+        so in as many words, because that is a state that needs a person.
+        """
+        if not res.overrides:
+            return
+        self._ensure_audit()
+        try:
+            records = audit.record_result(
+                self.client, res, actor=self.actor, actor_kind=self.actor_kind)
+        except Exception as e:                      # noqa: BLE001 — re-raised below
+            raise AuditWriteFailed(
+                f"{res.doctype} {res.name} has {len(res.overrides)} unrecorded "
+                f"override(s) and was rolled back.\n"
+                f"  audit write failed: {type(e).__name__}: {str(e)[:300]}\n"
+                f"  compensation: {self._unwind(res)}"
+            ) from e
+
+        # Carry the truth back to the caller: what the document actually stored,
+        # whether it drifted from the request, and the record that says so.
+        for o, rec in zip(res.overrides, records):
+            o.record = rec["name"]
+            o.drift = rec["drift"]
+            if rec["drift"] != "unverified":
+                o.stored_value = (rec["stored_num"] if rec.get("is_numeric")
+                                  else rec["stored_value"])
+        res.override_records = [r["name"] for r in records]
+
+    def _unwind(self, res: IntentResult) -> str:
+        """Undo the document an override could not be recorded against.
+        Returns a description of what happened, for the exception message."""
+        if not res.name:
+            return "nothing to undo; the document was never saved"
+        try:
+            if res.docstatus == 1:
+                self.client.call("frappe.client.cancel",
+                                 doctype=res.doctype, name=res.name)
+                return (f"{res.name} cancelled (docstatus 2); its GL entries are "
+                        f"reversed and the books are where they started")
+            self.client.call("frappe.client.delete",
+                             doctype=res.doctype, name=res.name)
+            return f"{res.name} deleted; it never left draft"
+        except FrappeError as ce:
+            return (f"COMPENSATION FAILED — {res.doctype} {res.name} is still "
+                    f"live with an unrecorded override. This needs a human. "
+                    f"({str(ce)[:200]})")
+
+    def _cite_record(self, res: IntentResult) -> None:
+        """Leave a breadcrumb on the document pointing at its override records.
+
+        Deliberately a Comment and not `remarks`. `remarks` is a business field
+        that belongs to whoever wrote it — the previous version of this engine
+        overwrote it unconditionally, destroying caller-supplied text to make
+        room for a log line it had no right to put there. A Comment is the
+        field Frappe provides for exactly this and it adds rather than replaces.
+
+        Best-effort, and non-fatal by design: the authoritative record already
+        exists and is immutable. Losing a convenience pointer is not worth
+        cancelling a correct invoice over, which is the opposite of the call
+        made in _record_overrides — and the difference is that this one is a
+        duplicate of information already safely stored.
+        """
+        if not res.override_records:
+            return
+        try:
+            self.client.insert({
+                "doctype": "Comment", "comment_type": "Info",
+                "reference_doctype": res.doctype, "reference_name": res.name,
+                "content": ("Override recorded in Intent Override Log: "
+                            + ", ".join(res.override_records)),
+            })
+        except FrappeError:
+            pass
 
     # ---- contract resolution -------------------------------------------------
 
@@ -252,18 +415,17 @@ class IntentEngine:
                 if fname == "rate" and not derived_value:
                     derived_value = derived.get("price_list_rate")
                 res.overrides.append(
-                    Override(fname, derived_value, o["value"], o["reason"].strip(), idx)
+                    Override(fieldname=fname, derived_value=derived_value,
+                             requested_value=o["value"], reason=o["reason"].strip(),
+                             row_idx=idx)
                 )
                 row[fname] = o["value"]
             rows.append(row)
 
         doc = dict(parent)
         doc["items"] = rows
-        if res.overrides:
-            doc["remarks"] = "; ".join(
-                f"override {o.fieldname}: {o.derived_value} -> {o.supplied_value} ({o.reason})"
-                for o in res.overrides
-            )
+        # `remarks` is left exactly as the caller set it. The override is
+        # recorded below, after the document exists, in a doctype built for it.
 
         saved = self.client.insert(doc)
         if submit and spec["maps_to"].get("submittable"):
@@ -271,6 +433,12 @@ class IntentEngine:
         res.name = saved.get("name")
         res.docstatus = saved.get("docstatus")
         res.grand_total = saved.get("grand_total")
+
+        # After the document is saved and submitted, never before: the record
+        # is built by reading the persisted document back, and a read taken
+        # before submit would miss whatever the submit path changed.
+        self._record_overrides(res)
+        self._cite_record(res)
 
         self._check_invariants(spec, saved, res)
         return res

@@ -77,6 +77,7 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Iterable
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -90,7 +91,12 @@ GENESIS = "0" * 64
 # is either derived from these (value_delta) or is chain plumbing (seq,
 # prev_hash, record_hash). Changing this list changes every future hash, so it
 # is versioned: SCHEMA_VERSION is part of the hashed payload.
-SCHEMA_VERSION = 2
+# 3: the canonical blob became length-prefixed (see _blob_v3). Version 2 used
+# json.dumps, which cannot be reproduced inside a Frappe Server Script — no
+# `json`, no `frappe.as_json`, and json.dumps' ensure_ascii escaping is not
+# something to hand-roll in a sandbox. Both encoders are kept and dispatched on
+# each record's own stored schema_version, so v2 records still verify.
+SCHEMA_VERSION = 3
 HASHED_FIELDS = [
     "target_doctype",
     "target_name",
@@ -426,12 +432,46 @@ def _as_num(v: Any) -> float | None:
         return None
 
 
-def _record_hash(payload: dict, prev_hash: str, seq: int) -> str:
+def _blob_v3(payload: dict, prev_hash: str, seq: int) -> str:
+    """Length-prefixed canonical encoding.
+
+        iol|v3|<seq>|<prev_hash>|<field>=<len>:<value>|<field>=<len>:<value>|...
+
+    Every value carries its own character count, so no character in a reason or
+    an actor name can be mistaken for a separator and nothing needs escaping.
+    Field order is HASHED_FIELDS, fixed, so nothing needs sorting either.
+
+    That matters because this function has a second implementation, in
+    harness/server_scripts/bill_intent.py, running under RestrictedPython with
+    no json module and no imports. Two implementations of a hash have to agree
+    byte for byte or the chain reports tampering that did not happen; the way
+    to make that safe is to encode something a sandbox can build with str(),
+    len() and concatenation, which json.dumps(ensure_ascii=True) is not.
+    """
+    parts = ["iol", "v3", str(seq), prev_hash]
+    for k in HASHED_FIELDS:
+        v = _canon(payload.get(k))
+        parts.append(f"{k}={len(v)}:{v}")
+    return "|".join(parts)
+
+
+def _blob_v2(payload: dict, prev_hash: str, seq: int, version: int) -> str:
+    """The original JSON encoding. Retained only so records written before the
+    v3 change still verify rather than being reported as tampered."""
     body = {k: _canon(payload.get(k)) for k in HASHED_FIELDS}
-    body["_schema"] = SCHEMA_VERSION
+    body["_schema"] = version
     body["_seq"] = seq
     body["_prev"] = prev_hash
-    blob = json.dumps(body, sort_keys=True, separators=(",", ":"))
+    return json.dumps(body, sort_keys=True, separators=(",", ":"))
+
+
+KNOWN_SCHEMAS = (2, 3)
+
+
+def _record_hash(payload: dict, prev_hash: str, seq: int,
+                 version: int = SCHEMA_VERSION) -> str:
+    blob = (_blob_v3(payload, prev_hash, seq) if version >= 3
+            else _blob_v2(payload, prev_hash, seq, version))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
@@ -605,7 +645,7 @@ def record_override(
         "actor": actor,
         "actor_kind": actor_kind,
         "actor_user": _session_user(client),
-        "recorded_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f"),
+        "recorded_at": _site_now(client),
         "schema_version": SCHEMA_VERSION,
         **{k: v for k, v in facts.items() if v is not None},
     }
@@ -642,6 +682,37 @@ def retry_transient(fn, attempts: int = 5, base_delay: float = 0.15):
             if i == attempts - 1 or not any(t in str(e) for t in transient):
                 raise
             time.sleep(base_delay * (2 ** i))
+
+
+_TZ_CACHE: dict[int, str] = {}
+
+
+def _site_now(client: FrappeClient) -> str:
+    """Timestamp in the SITE's timezone, not the caller's, and not UTC.
+
+    Every other timestamp in a Frappe database — `creation`, `modified`, a
+    voucher's posting time — is site-local. This instance runs Asia/Kolkata, so
+    a UTC `recorded_at` would sit 5h30m away from the `creation` of the very
+    record it is on, and an auditor reconciling the two columns would conclude
+    the log was written before the document it describes.
+
+    It also has to agree with the enforced server-side path, which has only
+    `frappe.utils.now()` and is site-local by construction. Two write paths
+    into one table cannot use two clocks.
+    """
+    key = id(client)
+    if key not in _TZ_CACHE:
+        try:
+            got = client.call("frappe.client.get_value", doctype="System Settings",
+                              filters={}, fieldname="time_zone") or {}
+            _TZ_CACHE[key] = got.get("time_zone") or "UTC"
+        except FrappeError:
+            _TZ_CACHE[key] = "UTC"
+    try:
+        tz = ZoneInfo(_TZ_CACHE[key])
+    except Exception:  # noqa: BLE001 — unknown tz name, fall back visibly to UTC
+        tz = timezone.utc
+    return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
 _USER_CACHE: dict[int, str] = {}
@@ -981,6 +1052,11 @@ def verify_chain(client: FrappeClient) -> dict:
       forked     two records claiming the same predecessor — see the caveat
       unsubmitted a record left at docstatus 0 by a crash between insert
                  and submit
+      unverifiable_schema
+                 a record written by a schema version this module no longer
+                 knows how to reproduce. Reported separately, and never as
+                 tampering: "I cannot check this" and "this was altered" are
+                 different findings and only one of them is an accusation.
 
     Honest limit: the hash is computed by the same process that writes the row,
     so this proves nothing against an adversary who can run this module's code
@@ -993,16 +1069,25 @@ def verify_chain(client: FrappeClient) -> dict:
         fields=LIST_FIELDS + ["schema_version"], order_by="seq asc",
         limit_page_length=0) or []
     out = {"records": len(rows), "tampered": [], "broken": [], "forked": [],
-           "unsubmitted": [], "ok": True, "head": None}
+           "unsubmitted": [], "unverifiable_schema": [], "ok": True, "head": None}
     claimed: dict[str, str] = {}
     prev_hash, prev_seq = GENESIS, 0
     for r in rows:
         if r.get("docstatus") != 1:
             out["unsubmitted"].append(r["name"])
-        want = _record_hash(r, r.get("prev_hash") or GENESIS, int(r.get("seq") or 0))
-        if want != (r.get("record_hash") or ""):
-            out["tampered"].append({"name": r["name"], "stored": r.get("record_hash"),
-                                    "recomputed": want})
+        # Recompute with the encoder that record was written by, not the one
+        # this module happens to use now. Getting that wrong would report a
+        # perfectly good older record as tampered — an accusation, from a tool
+        # whose whole value is that its accusations are trustworthy.
+        ver = int(r.get("schema_version") or 0)
+        if ver not in KNOWN_SCHEMAS:
+            out["unverifiable_schema"].append({"name": r["name"], "schema_version": ver})
+        else:
+            want = _record_hash(r, r.get("prev_hash") or GENESIS,
+                                int(r.get("seq") or 0), version=ver)
+            if want != (r.get("record_hash") or ""):
+                out["tampered"].append({"name": r["name"], "stored": r.get("record_hash"),
+                                        "recomputed": want})
         if (r.get("prev_hash") or GENESIS) != prev_hash:
             out["broken"].append({"name": r["name"], "seq": r.get("seq"),
                                   "expected_prev": prev_hash,
@@ -1013,7 +1098,8 @@ def verify_chain(client: FrappeClient) -> dict:
         claimed[p] = r["name"]
         prev_hash, prev_seq = r.get("record_hash") or "", int(r.get("seq") or 0)
     out["head"] = {"seq": prev_seq, "hash": prev_hash} if rows else None
-    out["ok"] = not (out["tampered"] or out["broken"] or out["forked"] or out["unsubmitted"])
+    out["ok"] = not (out["tampered"] or out["broken"] or out["forked"]
+                     or out["unsubmitted"] or out["unverifiable_schema"])
     return out
 
 

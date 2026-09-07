@@ -1,0 +1,46 @@
+{
+  "passed": 10,
+  "total": 10,
+  "cases": [
+    {
+      "n": 1,
+      "pass": true
+    },
+    {
+      "n": 2,
+      "pass": true
+    },
+    {
+      "n": 3,
+      "pass": true
+    },
+    {
+      "n": 4,
+      "pass": true
+    },
+    {
+      "n": 5,
+      "pass": true
+    },
+    {
+      "n": 6,
+      "pass": true
+    },
+    {
+      "n": 7,
+      "pass": true
+    },
+    {
+      "n": 8,
+      "pass": true
+    },
+    {
+      "n": 9,
+      "pass": true
+    },
+    {
+      "n": 10,
+      "pass": true
+    }
+  ]
+}

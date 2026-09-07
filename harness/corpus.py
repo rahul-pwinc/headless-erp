@@ -6,7 +6,23 @@ fails, that is a finding: either the intent layer is wrong, or ERPNext does
 something an accountant would not expect. Both are worth knowing, and neither
 is discoverable by diffing against the UI.
 
-Assertions available to a scenario:
+Steps available in `when`:
+
+  intent             go through IntentEngine.execute() (or execute_payment()
+                     for collect/pay) -- this is the sanctioned path, and
+                     what almost every scenario should use.
+  raw                a direct client.insert(), bypassing the intent engine
+                     entirely: what a naive caller (an MCP server, an agent
+                     with a price in hand) does. Exists only to demonstrate
+                     what the intent layer closes -- e.g. a master-data
+                     mutation (reports/derivation_map.md finding 5) or a
+                     uom/conversion_factor forgery (finding 7) that the
+                     intent engine's own derive step never reaches, because
+                     it never resolves a uom the caller invented. A scenario
+                     that uses `raw` is not testing the contract; it is
+                     proving the hole the contract is there to close.
+
+Assertions available in `then`:
 
   balanced           the voucher's GL entries net to zero
   gl                 an account is debited/credited by an amount
@@ -16,6 +32,12 @@ Assertions available to a scenario:
   docstatus          0 draft, 1 submitted, 2 cancelled
   refused            the intent must refuse, optionally matching text
   no_gl              the intent must post nothing to the ledger
+  line_field         a field on one item row of a document equals a value
+                     (e.g. stock_qty, conversion_factor) -- for findings
+                     that move a line-level number, not the document total
+  item_price         whether an Item Price row exists for (item, price
+                     list) -- proves or disproves that a transaction
+                     silently redefined master data
 """
 from __future__ import annotations
 
@@ -55,6 +77,15 @@ class CorpusRunner:
             return ctx.get(v[1:])
         return v
 
+    def _item(self, name: str) -> str:
+        return self.fx[name] if name in self.fx else name
+
+    def _lines(self, step_lines: list[dict]) -> list[dict]:
+        return [{"item_code": self._item(l.get("item", "item_code")),
+                  "qty": l.get("qty", 1),
+                  **{k: v for k, v in l.items() if k not in ("item", "qty")}}
+                 for l in step_lines]
+
     def _header(self, intent_id: str, extra: dict | None = None) -> dict:
         sell = {"customer": self.fx["customer"], "selling_price_list": self.fx["price_list"]}
         buy = {"supplier": self.fx["supplier"], "buying_price_list": self.fx["buy_price_list"]}
@@ -79,6 +110,20 @@ class CorpusRunner:
             base.pop("customer", None)
         base.update(extra or {})
         return base
+
+    def _run_raw(self, spec: dict) -> dict:
+        """A direct client.insert(), bypassing IntentEngine entirely -- see
+        the `raw` step documented in the module docstring. `like` picks
+        which header shape from `_header()` to start from (default "bill"),
+        so a raw scenario still gets a normal company/customer/dates
+        skeleton and only has to state the forged fields explicitly."""
+        doctype = spec.get("doctype", "Sales Invoice")
+        header = self._header(spec.get("like", "bill"), spec.get("header"))
+        doc = {**header, "doctype": doctype, "items": self._lines(spec.get("lines", []))}
+        saved = self.c.insert(doc)
+        if spec.get("submit"):
+            saved = self.c.submit(saved)
+        return {"doctype": doctype, "name": saved["name"], "doc": saved}
 
     # ---- assertions ----------------------------------------------------------
 
@@ -130,6 +175,37 @@ class CorpusRunner:
                 res.failures.append(f"{kind}: expected {want!r}, got {got!r}")
             return
 
+        if kind == "line_field":
+            if not doc:
+                res.failures.append(f"{kind}: no document in context"); return
+            dt, name = doc
+            d = self.c.get_doc(dt, name)
+            idx = a.get("row", 0)
+            items = d.get("items") or []
+            if idx >= len(items):
+                res.failures.append(f"line_field: row {idx} does not exist on {name}"); return
+            got = items[idx].get(a["field"])
+            want = a["value"]
+            if abs(float(got or 0) - float(want)) >= 0.01:
+                res.failures.append(
+                    f"line_field: row {idx} {a['field']} expected {want}, got {got}")
+            return
+
+        if kind == "item_price":
+            item_code = self._item(a["item"])
+            price_list = a.get("price_list", self.fx["price_list"])
+            rows = self.c.call(
+                "frappe.client.get_list", doctype="Item Price",
+                filters={"item_code": item_code, "price_list": price_list},
+                fields=["price_list_rate"], limit_page_length=0) or []
+            want_exists = a.get("exists", False)
+            if bool(rows) != want_exists:
+                found = f"rate {rows[0]['price_list_rate']}" if rows else "no Item Price row"
+                res.failures.append(
+                    f"item_price: expected exists={want_exists} for {item_code}/{price_list}, "
+                    f"found {found}")
+            return
+
         res.failures.append(f"unknown assertion {kind!r}")
 
     # ---- run -----------------------------------------------------------------
@@ -141,6 +217,12 @@ class CorpusRunner:
 
         try:
             for step in sc.get("when", []):
+                if "raw" in step:
+                    r = self._run_raw(step["raw"])
+                    ctx["last"] = (r["doctype"], r["name"])
+                    ctx[step.get("as", "raw")] = (r["doctype"], r["name"])
+                    res.docs.append(f"{r['doctype']}/{r['name']} (raw, bypassed the intent layer)")
+                    continue
                 intent_id = step["intent"]
                 if intent_id in self.eng.ITEMLESS:
                     allocs = [{**a, "doc": self._resolve(a["doc"], ctx)}
@@ -159,11 +241,7 @@ class CorpusRunner:
                         res.failures.extend(f"invariant: {f}" for f in r.invariant_failures)
                     continue
                 header = self._header(intent_id, step.get("header"))
-                lines = [{"item_code": self.fx[l.get("item", "item_code")]
-                          if l.get("item", "item_code") in self.fx else l.get("item"),
-                          "qty": l.get("qty", 1), **{k: v for k, v in l.items()
-                                                     if k not in ("item", "qty")}}
-                         for l in step.get("lines", [])]
+                lines = self._lines(step.get("lines", []))
                 r = self.eng.execute(intent_id, header, lines,
                                      overrides=step.get("overrides"),
                                      submit=step.get("submit", True))

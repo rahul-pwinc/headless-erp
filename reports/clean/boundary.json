@@ -1,0 +1,38 @@
+{
+  "passed": 8,
+  "total": 8,
+  "checks": [
+    {
+      "check": "admin direct write allowed",
+      "pass": true
+    },
+    {
+      "check": "agent direct write blocked",
+      "pass": true
+    },
+    {
+      "check": "clean call derives the list price",
+      "pass": true
+    },
+    {
+      "check": "caller supplies rate",
+      "pass": true
+    },
+    {
+      "check": "caller supplies price_list_rate",
+      "pass": true
+    },
+    {
+      "check": "override without a reason",
+      "pass": true
+    },
+    {
+      "check": "override with a reason",
+      "pass": true
+    },
+    {
+      "check": "item with no resolvable price",
+      "pass": true
+    }
+  ]
+}

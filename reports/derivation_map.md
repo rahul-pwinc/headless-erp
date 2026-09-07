@@ -39,10 +39,10 @@ Ordered by how much of the ledger they move.
 | 1 | **`conversion_rate` is accepted verbatim.** The server holds a `Currency Exchange` record and will use it — but only if the caller omits the field. A `$1,000` invoice submitted with `conversion_rate: 1.0` posts **₹1,000** to the GL instead of ₹87,000. Debits equal credits. | (b) silently accepted | [live] `ACC-SINV-2026-02343`, `SAL-ORD-2026-00049/50` |
 | 2 | **A named tax template does not put its rows on the document.** Naming `taxes_and_charges` and supplying zero `taxes` rows produces an invoice with **no tax at all** on this site's settings; supplying a 0% row against an 18% template keeps the 0% row. | (b) | [live] `ACC-SINV-2026-02367`, `ACC-SINV-2026-02279` |
 | 3 | **Pricing rules compute their discount off the caller's own `price_list_rate`.** Same 10% rule: honest call → `discount_amount 25`, forged `price_list_rate: 10000` → `discount_amount 1000`, `rate 9000`, and the row still cites `PRLE-0001`. | **(c) circular** | [live] `ACC-SINV-2026-02282` vs `02283` |
-| 4 | **`fetch_from` IS enforced server-side** — with a documented opt-out (`fetch_if_empty`) used by **75 of 367** fetch-fields in ERPNext, 19 of which are also `read_only` in the UI. `Sales Team.commission_rate` (read-only, master 2%) accepted **75%** → `incentives 750` instead of 20. | (a) mostly, (b) for `fetch_if_empty` | [live] `ACC-SINV-2026-02276`, `02357` |
+| 4 | **`fetch_from` IS enforced server-side** — with an opt-out (`fetch_if_empty`) on **75 of 367** fetch-fields, 19 also `read_only`. Tested individually (§7): the material residue is **one** field. `Sales Team.commission_rate` (read-only in Desk, master 2%) accepted **75%** → `incentives 750` instead of 20. | (a) mostly, (b) for `fetch_if_empty` | [live] `ACC-SINV-2026-02276`, `02357` |
 | 5 | **A caller's `rate` can be written back into the Price List master.** With `Stock Settings.auto_insert_price_list_rate_if_missing = 1` (**it is 1 on this instance**), invoicing an unpriced item at 7777 created `Item Price` for `Standard Selling` at 7777. The next honest caller now *derives* 7777. | **(c) circular, with persistence** | [live] `ACC-SINV-2026-02315` → `Item Price orgvfhc04s` |
 | 6 | **Item GL accounts and cost centres are caller-supplied.** Server derives `income_account = Sales - HTC`; caller's `Interest Income - HTC` survives. Same for `expense_account` on Purchase Invoice. | (b) | [live] `ACC-SINV-2026-02356`, `ACC-PINV-2026-00062` |
-| 7 | **`conversion_factor` is circular when `uom != stock_uom`.** Master says `Box = 10`; caller sent 7; stored 7; `stock_qty` became **28 instead of 40**. This moves stock ledger quantities, not just money. | **(c) circular** | [live] `ACC-SINV-2026-02314` |
+| 7 | **`conversion_factor` is circular when `uom != stock_uom`** — and it is the **only** field found that reaches the stock ledger. Master says `Box = 10`; caller sent 7; a Delivery Note posted **`-28` instead of `-40`**. The qty×valuation vs Stock-In-Hand invariant still **holds**, because the GL is computed from the SLE (`stock_controller.py:797`) — so both sides are wrong together and no reconciliation can see it. Full treatment in §8. | **(c) circular** | [live] `ACC-SINV-2026-02314`, `MAT-DN-2026-00044` |
 | 8 | **`weight_per_unit` is in `force_item_fields` and is still the caller's own number** — the pattern already known, confirmed live: item master weight 0, caller sent 999, stored 999, `total_weight` recomputed to 3996. | **(c) circular** | [live] `ACC-SINV-2026-02284` |
 
 ---
@@ -114,9 +114,12 @@ Full dump: `scratchpad/fetch_census.txt`. The ones with financial or quantitativ
 | Discounted Invoice | `outstanding_amount` | `sales_invoice.outstanding_amount` | |
 | Purchase Invoice Item | `item_group` | `item_code.item_group` | `read_only: 1` |
 
-**19 fields are both `fetch_if_empty: 1` and `read_only: 1`** — the exact "the UI cannot produce this
-document, the API can" class that `price_list_rate` occupies. Full list in `fetch_census.txt`;
-the money one is `Sales Team.commission_rate`.
+**19 fields are both `fetch_if_empty: 1` and `read_only: 1`.** That is an **upper bound on exposure,
+not a finding** — `fetch_if_empty` only means Frappe's `fetch_from` pass declines to overwrite, and
+ERPNext can still overwrite the same field by another route. I tested all 19 individually in **§7**:
+8 survive, 2 are overwritten, 9 untested, and of the 8 survivors 2 are inert and 5 cosmetic.
+**Exactly one is financially material — `Sales Team.commission_rate`.** Do not quote the 19 without
+§7 attached.
 
 **[live]** Sales Invoice `ACC-SINV-2026-02357`: `Sales Person HL Person` has `commission_rate 2`.
 Caller sent `sales_team: [{sales_person: HL Person, allocated_percentage: 100, commission_rate: 75}]`.
@@ -421,10 +424,146 @@ Stated so nothing here is read as more than it is.
    frappe citations are container line numbers for 16.33.0. The same code exists in `vendor/frappe`
    at `base_document.py:1090-1147` / `document.py:732, 846, 1645`, so the logic is unchanged between
    v16.33 and v17-dev — but if you quote a frappe line number, say which tree.
+9. **Nine of the 19 `fetch_if_empty` + `read_only` fields** (§7 rows 11–19). Two of the ten I did
+   check turned out to be overwritten by a second mechanism, so **assume nothing about the nine** —
+   the prior is now roughly 20% overwritten, not 0%.
+10. **Whether a forged `warehouse` can straddle two warehouses mapped to different inventory
+   accounts.** If it can, that would be a genuine internal-invariant break rather than the
+   both-sides-wrong-together case in §8a. Not constructed.
 
 ---
 
-## 7. Reproduction, and the state of the instance
+## 7. The `fetch_if_empty` + `read_only` list, tested one by one
+
+Requested: the 19 fields that are both `fetch_if_empty: 1` and `read_only: 1` — "no human could set
+them, so any caller value is unreachable by hand."
+
+**Correction to my own §2 first.** I presented those 19 as fields where a caller value survives.
+That was an inference from one mechanism, and testing them found it is wrong for some. `fetch_if_empty`
+only tells you that *Frappe's* `fetch_from` pass declines to overwrite. **ERPNext can still overwrite
+the same field through a second, independent mechanism** — and for two of the 19 it does. The list
+is an **upper bound on exposure, not a finding**. Every row below is now marked with what actually
+happened.
+
+Live probes are named. `—` means I did not construct the case.
+
+| # | DocType | field | fetch_from | result | evidence |
+|---|---|---|---|---|---|
+| 1 | Sales Invoice | `language` | `customer.language` | **survives** | [live] `ACC-SINV-2026-02277`, sent `fr`, customer `en-US` |
+| 2 | Sales Order | `language` | `customer.language` | **survives** | [live] sent `de`, stored `de` |
+| 3 | Delivery Note | `language` | `customer.language` | **survives** | [live] sent `de`, stored `de` |
+| 4 | **Sales Team** | **`commission_rate`** | `sales_person.commission_rate` | **survives — financially material** | [live] `ACC-SINV-2026-02357` |
+| 5 | Work Order | `stock_uom` | `production_item.stock_uom` | **survives, but inert** | [live] `MFG-WO-2026-00002` |
+| 6 | Work Order | `item_name` | `production_item.item_name` | **survives** (cosmetic) | [live] same doc |
+| 7 | Product Bundle Item | `uom` | `item_code.stock_uom` | **survives, but inert** | [live] bundle `PROBE-BUNDLE-001` |
+| 8 | Task Depends On | `subject` | `task.subject` | **survives** (cosmetic) | [live] `TASK-2026-00002` |
+| 9 | **Purchase Invoice Item** | `item_group` | `item_code.item_group` | **OVERWRITTEN** | [live] `ACC-PINV-2026-00073` |
+| 10 | **Subcontracting Order Item** | `rate` | `item_code.standard_rate` | **OVERWRITTEN** | [code] `subcontracting_order.py:200` |
+| 11 | Job Card | `item_name` | `production_item.item_name` | untested | — |
+| 12 | Ledger Merge | `account_name` | `account.account_name` | untested | — |
+| 13 | POS Closing Entry | `company` | `pos_opening_entry.company` | untested | [code] `pos_closing_entry.py:75-77` validates only the opening entry's *status* |
+| 14 | POS Closing Entry | `pos_profile` | `pos_opening_entry.pos_profile` | untested | as above |
+| 15 | Sales Forecast Item | `item_name` | `item_code.item_name` | untested | — |
+| 16 | Sales Forecast Item | `uom` | `item_code.sales_uom` | untested | — |
+| 17 | Serial No | `item_name` | `item_code.item_name` | untested | — |
+| 18 | Subcontracting Inward Order Item | `item_name` | `item_code.item_name` | untested | — |
+| 19 | Subcontracting Order | `schedule_date` | `purchase_order.schedule_date` | untested | — |
+
+### Why #9 and #10 are overwritten
+
+**#9** — `item_group` is in `force_item_fields` (`accounts_controller.py:97`), so
+`set_missing_item_details` (`:1127`) overwrites it *after* `fetch_from` declined to. Item master
+`item_group` is `Products`; caller sent `Raw Material`; stored `Products`. **Two mechanisms guard the
+same field and the ERPNext one wins.** The same reasoning applies to any of the 19 whose fieldname is
+in `force_item_fields` *and* whose parent is an `AccountsController` child table.
+
+**#10** — `subcontracting_order.py:200` unconditionally recomputes
+`item.rate = item.rm_cost_per_qty + item.service_cost_per_qty + flt(item.additional_cost_per_qty)`.
+Code-read only; I did not build a subcontracting order.
+
+### Why #5 and #7 are inert
+
+Both survive on the document, and both are **ignored by the code that actually moves stock**:
+
+- **#7 Product Bundle Item.uom** — `packed_item.py:232-233` hard-sets
+  `pi_row.uom = item_data.stock_uom` and `pi_row.qty = flt(packing_item.qty) * flt(main_item_row.stock_qty)`.
+  The bundle row's UOM never reaches the packing list.
+  **[live]** bundle row forged to `Box` (component stock UOM is `Nos`); Delivery Note `MAT-DN-2026-00046`
+  produced `packed_items: [{qty: 2.0, uom: 'Nos', conversion_factor: 1.0}]`.
+- **#5 Work Order.stock_uom** — **[live]** `MFG-WO-2026-00002` stored `stock_uom: Box` against a
+  production item stocked in `Nos`. The Manufacture Stock Entry built from it
+  (`MAT-STE-2026-00001`) used `uom: Nos, conversion_factor: 1.0` on every row, and the resulting
+  ledger entries were `-10 Nos` raw and `+5 Nos` finished. The forged UOM did not propagate.
+
+### Honest count
+
+Of 19: **8 survive** (live-verified), **2 are overwritten**, **9 untested**. Of the 8 survivors,
+**2 are inert** and 5 are cosmetic (`language` ×3, two `item_name`s). **Exactly one is financially
+material: `Sales Team.commission_rate`** — master 2%, API accepted 75%, `incentives 750.0` on an
+`allocated_amount` of 1000.0, on a field the Desk form renders read-only (`ACC-SINV-2026-02357`).
+
+That is the defensible claim. "19 read-only fields accept caller values" would not survive a buyer
+checking them.
+
+---
+
+## 8. Does anything move the stock ledger?
+
+Two separate questions, and they have opposite answers.
+
+### 8a. Can the invariant be broken? No — and the reason matters.
+
+**The GL entry for a stock transaction is computed *from* the Stock Ledger Entry, not independently:**
+
+```python
+# erpnext/controllers/stock_controller.py:797
+"debit": flt(sle.stock_value_difference, precision),
+```
+
+So the two sides cannot disagree: whatever the SLE says, the GL copies. **[live]** end to end on a
+clean slate (zero SLEs, `Stock In Hand - HTC` at 0 before the run):
+
+| step | SLE | GL | Bin |
+|---|---|---|---|
+| receive 100 Nos @ 10 (`MAT-PRE-2026-00042`) | `+100`, `stock_value_difference 1000` | `Stock In Hand` Dr 1000 | qty 100, value 1000 |
+| honest DN, 4 Box, `conversion_factor` omitted (`MAT-DN-2026-00043`) | `-40`, diff `-400` | `Stock In Hand` Cr 400, COGS Dr 400 | qty 60 |
+| **forged DN, 4 Box, `conversion_factor: 7`** (`MAT-DN-2026-00044`) | **`-28`**, diff **`-280`** | `Stock In Hand` Cr 280, COGS Dr 280 | qty 32 |
+
+Final: `Bin.stock_value = 320.0`, `Stock In Hand - HTC = 320.0`. **The invariant holds exactly.**
+
+That is not reassuring, it is the point. **The invariant holds *because* the error propagates to both
+sides.** The warehouse physically shipped 40 units; the system believes 28 left and 32 remain when 60
+do. The disagreement is between the system and the physical world, and no internal reconciliation —
+including this invariant — can see it. It is the same laundering pattern as `conversion_rate`, one
+layer down: consistency preserved, correctness destroyed, audit trail silent.
+
+### 8b. Which findings actually move stock quantity? Exactly one.
+
+I tested each candidate rather than assuming:
+
+| candidate | moves the stock ledger? | evidence |
+|---|---|---|
+| **`conversion_factor`** on a transaction line | **YES** — `stock_qty = qty × conversion_factor`, and `stock_qty` becomes SLE `actual_qty` | [live] `MAT-DN-2026-00044`: `-28` instead of `-40` |
+| `stock_qty` asserted directly | no — recomputed | [live] `MAT-DN-2026-00048`: sent `stock_qty: 50` with `qty: 1 Nos`; stored `1.0`; SLE `-1.0` |
+| `incoming_rate` asserted | no — recomputed on a new document (`selling_controller.py:567-570`) | [live] `MAT-DN-2026-00045`: sent `9999`, stored `10.0`, SLE valuation `10.0`. **This upgrades §4.7 from code-read to live-verified.** |
+| `Work Order.stock_uom` (§7 #5) | no — inert | [live] `MAT-STE-2026-00001` |
+| `Product Bundle Item.uom` (§7 #7) | no — inert | [live] `MAT-DN-2026-00046` |
+| `warehouse` (class (b), §4.3) | changes *which* bin is drawn down, not the quantity | [code] not separately tested |
+
+So the stock exposure is **narrower than the monetary exposure** — one field, `conversion_factor`,
+and only when `uom != stock_uom` (`get_item_details.py:609-614`; when they are equal, `:610` hard-sets
+`1.0`). But it is the more serious kind of error, exactly as you framed it: a monetary error is
+reversible with a journal entry, whereas this one makes the warehouse and the books agree with each
+other and disagree with the shelf.
+
+**Not tested:** Stock Entry, Stock Reconciliation, and Purchase Receipt paths for the same field, and
+whether a forged `warehouse` can straddle two warehouses mapped to *different* inventory accounts (if
+it can, that would be a genuine internal-invariant break; I did not construct it). Stock
+Reconciliation is excluded on purpose — it is *designed* to set qty and valuation directly.
+
+---
+
+## 9. Reproduction, and the state of the instance
 
 ```bash
 cd /Users/rahul/programs/headless-erp
@@ -466,6 +605,47 @@ and would come back if re-enabled.**
 `grand_total 1000.0`, `customer_address None`, `conversion_rate 1.0`, item UOMs `[('Nos', 1.0)]`,
 zero `Item Price` rows on `HL-UNPRICED-001`, zero `Currency Exchange` rows.
 That matches the README's baseline, so the instance is back to where it started.
+
+### Cleanup incident — I destroyed data and recovered it
+
+Recording this because it bears on how much to trust the instance, and because the recovery path is
+worth knowing.
+
+Cleaning up the stock probes, I ran a delete loop over `Purchase Receipt`, `Delivery Note`,
+`Work Order` and `Stock Entry` **with no filter restricting it to my own documents**. I had created 1
+Purchase Receipt and 5 Delivery Notes. The loop deleted **41 Purchase Receipts and 44 Delivery Notes**
+— roughly 40 and 39 of which belonged to the existing corpus, not to me.
+
+Recovery, and its limits:
+
+- Frappe writes the full JSON of every deleted document to the **`Deleted Document`** doctype, and
+  `frappe.core.doctype.deleted_document.deleted_document.restore` rebuilds it. Payloads were complete
+  (117 fields including child tables).
+- **83 of 84 restored.** The one failure, `MAT-DN-2026-00046`, is mine — it references
+  `PROBE-BUNDLE-001`, which I had already deleted, so link validation refuses it.
+- **Every deleted document was `docstatus 0` (draft)** — verified by reading the stored payload of all
+  85 rows. So no submitted document was cancelled, and no ledger effect was reversed.
+- **Every restored document came back with its original docstatus** — verified by comparing the
+  payload's `docstatus` against the live document for all 85. Zero mismatches.
+- Post-recovery: `Purchase Receipt` 42, `Delivery Note` 47, live SLEs **0**, `Stock In Hand - HTC`
+  **0**.
+
+**What I did not do:** I stopped short of a second delete pass to remove my own residue. Having
+already over-deleted once, a further destructive loop was not mine to run unilaterally. The residue
+below is inert — all cancelled, zero stock and zero GL effect — and is yours to remove or keep:
+
+| document | state |
+|---|---|
+| `MAT-PRE-2026-00042` (Purchase Receipt) | cancelled |
+| `MAT-DN-2026-00043/44/45/48` (Delivery Notes) | cancelled |
+| `MAT-STE-2026-00001` (Stock Entry) | cancelled |
+| `MFG-WO-2026-00001`, `MFG-WO-2026-00002` (Work Orders) | one cancelled, one draft |
+| Items `PROBE-STOCK-001`, `PROBE-FG-001` | `LinkExistsError` on delete |
+| `BOM-PROBE-FG-001-001` | cancelled, `LinkExistsError` on delete |
+
+The lesson generalises past this repo: **a probe harness needs its cleanup scoped to a manifest of
+what it created**, not to a doctype. The `created` list was being collected in the probe scripts and
+I did not use it in the cleanup.
 
 **If you re-run the probes, they will recreate all of the above.** Anything added in future should
 carry a `PROBE-` prefix rather than `HL-`, so probe artefacts are distinguishable from the repo's own

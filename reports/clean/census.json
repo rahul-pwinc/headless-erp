@@ -1,0 +1,1883 @@
+{
+  "probes_run": 203,
+  "by_verdict": {
+    "protected": 150,
+    "silently_accepted": 43,
+    "rejected": 10
+  },
+  "doctypes_probed": [
+    "Delivery Note",
+    "Material Request",
+    "Purchase Invoice",
+    "Purchase Order",
+    "Purchase Receipt",
+    "Quotation",
+    "Sales Invoice",
+    "Sales Order",
+    "Supplier Quotation"
+  ],
+  "silently_accepted_fields": [
+    "discount_amount",
+    "discount_percentage",
+    "last_purchase_rate",
+    "min_order_qty",
+    "price_list_rate",
+    "rate",
+    "weight_per_unit"
+  ],
+  "protected_fields": [
+    "amount",
+    "base_amount",
+    "base_price_list_rate",
+    "base_rate",
+    "conversion_factor",
+    "delivered_by_supplier",
+    "discount_amount",
+    "discount_percentage",
+    "grant_commission",
+    "gross_profit",
+    "has_batch_no",
+    "has_margin",
+    "has_serial_no",
+    "is_fixed_asset",
+    "last_purchase_rate",
+    "net_amount",
+    "net_rate",
+    "rate",
+    "stock_qty",
+    "update_stock",
+    "valuation_rate",
+    "weight_per_unit"
+  ],
+  "probes": [
+    {
+      "doctype": "Quotation",
+      "fieldname": "amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "base_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "base_price_list_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "base_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "conversion_factor",
+      "derived_value": 1.0,
+      "supplied_value": 0.004,
+      "stored_value": 1.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "delivered_by_supplier",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "discount_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "discount_percentage",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "grant_commission",
+      "derived_value": 1,
+      "supplied_value": 0.004,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "gross_profit",
+      "derived_value": -480.0,
+      "supplied_value": -1.92,
+      "stored_value": 520.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "has_batch_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "has_margin",
+      "derived_value": false,
+      "supplied_value": true,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "has_serial_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "is_fixed_asset",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "net_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "net_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "price_list_rate",
+      "derived_value": 250.0,
+      "supplied_value": 1.0,
+      "stored_value": 1.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": null,
+      "verdict": "rejected",
+      "note": "[417] POST http://localhost:8080/api/resource/Quotation\n{\"exception\":\"erpnext.utilities.transaction_base.UOMMustBeIntegerError: Row 1: Quantity (0.016) cannot b"
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "stock_qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": 4.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "update_stock",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "valuation_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "weight_per_unit",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "base_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "base_price_list_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "base_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "conversion_factor",
+      "derived_value": 1.0,
+      "supplied_value": 0.004,
+      "stored_value": 1.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "delivered_by_supplier",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "rejected",
+      "note": "[417] POST http://localhost:8080/api/resource/Sales%20Order\n{\"exception\":\"frappe.exceptions.ValidationError: Row #1: Set Supplier for item HL-WIDGET-001\",\"exc_t"
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "discount_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "discount_percentage",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "grant_commission",
+      "derived_value": 1,
+      "supplied_value": 0.004,
+      "stored_value": 1,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "gross_profit",
+      "derived_value": -480.0,
+      "supplied_value": -1.92,
+      "stored_value": 520.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "has_batch_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "has_margin",
+      "derived_value": false,
+      "supplied_value": true,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "has_serial_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "is_fixed_asset",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "net_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "net_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "price_list_rate",
+      "derived_value": 250.0,
+      "supplied_value": 1.0,
+      "stored_value": 1.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": null,
+      "verdict": "rejected",
+      "note": "[417] POST http://localhost:8080/api/resource/Sales%20Order\n{\"exception\":\"erpnext.utilities.transaction_base.UOMMustBeIntegerError: Row 1: Quantity (0.016) cann"
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "stock_qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": 4.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "update_stock",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "valuation_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "weight_per_unit",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "base_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "base_price_list_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "base_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "conversion_factor",
+      "derived_value": 1.0,
+      "supplied_value": 0.004,
+      "stored_value": 1.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "delivered_by_supplier",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": 1,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "discount_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "discount_percentage",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "grant_commission",
+      "derived_value": 1,
+      "supplied_value": 0.004,
+      "stored_value": 1,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "has_batch_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "has_margin",
+      "derived_value": false,
+      "supplied_value": true,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "has_serial_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "is_fixed_asset",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": 0,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "net_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "net_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "price_list_rate",
+      "derived_value": 250.0,
+      "supplied_value": 1.0,
+      "stored_value": 1.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": null,
+      "verdict": "rejected",
+      "note": "[417] POST http://localhost:8080/api/resource/Sales%20Invoice\n{\"exception\":\"erpnext.utilities.transaction_base.UOMMustBeIntegerError: Row 1: Quantity (0.016) ca"
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "stock_qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": 4.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "update_stock",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Invoice",
+      "fieldname": "weight_per_unit",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "base_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "base_price_list_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "base_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "conversion_factor",
+      "derived_value": 1.0,
+      "supplied_value": 0.004,
+      "stored_value": 1.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "delivered_by_supplier",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "discount_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "discount_percentage",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "grant_commission",
+      "derived_value": 1,
+      "supplied_value": 0.004,
+      "stored_value": 1,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "has_batch_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "has_margin",
+      "derived_value": false,
+      "supplied_value": true,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "has_serial_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "is_fixed_asset",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "net_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 1000.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "net_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 250.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "price_list_rate",
+      "derived_value": 250.0,
+      "supplied_value": 1.0,
+      "stored_value": 1.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": null,
+      "verdict": "rejected",
+      "note": "[417] POST http://localhost:8080/api/resource/Delivery%20Note\n{\"exception\":\"erpnext.utilities.transaction_base.UOMMustBeIntegerError: Row 1: Quantity (0.016) ca"
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "stock_qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": 4.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "update_stock",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Delivery Note",
+      "fieldname": "weight_per_unit",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "base_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "base_price_list_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "base_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "conversion_factor",
+      "derived_value": 1.0,
+      "supplied_value": 0.004,
+      "stored_value": 1.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "delivered_by_supplier",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "discount_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "discount_percentage",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "grant_commission",
+      "derived_value": 1,
+      "supplied_value": 0.004,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "has_batch_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "has_margin",
+      "derived_value": false,
+      "supplied_value": true,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "has_serial_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "is_fixed_asset",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "net_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "net_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "price_list_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": 0.48,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": null,
+      "verdict": "rejected",
+      "note": "[417] POST http://localhost:8080/api/resource/Supplier%20Quotation\n{\"exception\":\"erpnext.utilities.transaction_base.UOMMustBeIntegerError: Row 1: Quantity (0.01"
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "stock_qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": 4.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "update_stock",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "weight_per_unit",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "base_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "base_price_list_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "base_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "conversion_factor",
+      "derived_value": 1.0,
+      "supplied_value": 0.004,
+      "stored_value": 1.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "delivered_by_supplier",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": 1,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "discount_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "discount_percentage",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "grant_commission",
+      "derived_value": 1,
+      "supplied_value": 0.004,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "has_batch_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "has_margin",
+      "derived_value": false,
+      "supplied_value": true,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "has_serial_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "is_fixed_asset",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": 0,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": 0.48,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "net_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "net_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "price_list_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": 0.48,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": null,
+      "verdict": "rejected",
+      "note": "[417] POST http://localhost:8080/api/resource/Purchase%20Order\n{\"exception\":\"erpnext.utilities.transaction_base.UOMMustBeIntegerError: Row 1: Quantity (0.016) c"
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "stock_qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": 4.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "update_stock",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
+      "fieldname": "weight_per_unit",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "base_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "base_price_list_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "base_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "conversion_factor",
+      "derived_value": 1.0,
+      "supplied_value": 0.004,
+      "stored_value": 1.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "delivered_by_supplier",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "discount_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "discount_percentage",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "grant_commission",
+      "derived_value": 1,
+      "supplied_value": 0.004,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "has_batch_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "has_margin",
+      "derived_value": false,
+      "supplied_value": true,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "has_serial_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "is_fixed_asset",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": 0,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "net_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "net_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "price_list_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": 0.48,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": null,
+      "verdict": "rejected",
+      "note": "[417] POST http://localhost:8080/api/resource/Purchase%20Receipt\n{\"exception\":\"erpnext.utilities.transaction_base.UOMMustBeIntegerError: Row 1: Quantity (0.016)"
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "stock_qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": 4.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "update_stock",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "weight_per_unit",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "base_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "base_price_list_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "base_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "conversion_factor",
+      "derived_value": 1.0,
+      "supplied_value": 0.004,
+      "stored_value": 1.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "delivered_by_supplier",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": 1,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "discount_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "discount_percentage",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "grant_commission",
+      "derived_value": 1,
+      "supplied_value": 0.004,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "has_batch_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "has_margin",
+      "derived_value": false,
+      "supplied_value": true,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "has_serial_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "is_fixed_asset",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": 0,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "net_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "net_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "price_list_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": 0.48,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": null,
+      "verdict": "rejected",
+      "note": "[417] POST http://localhost:8080/api/resource/Purchase%20Invoice\n{\"exception\":\"erpnext.utilities.transaction_base.UOMMustBeIntegerError: Row 1: Quantity (0.016)"
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "stock_qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": 4.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "update_stock",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
+      "fieldname": "weight_per_unit",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 480.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "base_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "base_price_list_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "base_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "conversion_factor",
+      "derived_value": 1.0,
+      "supplied_value": 0.004,
+      "stored_value": 1.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "delivered_by_supplier",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "discount_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "discount_percentage",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "grant_commission",
+      "derived_value": 1,
+      "supplied_value": 0.004,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "has_batch_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "has_margin",
+      "derived_value": false,
+      "supplied_value": true,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "has_serial_no",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "is_fixed_asset",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "min_order_qty",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "net_amount",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "net_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "price_list_rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 7.0,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": null,
+      "verdict": "rejected",
+      "note": "[417] POST http://localhost:8080/api/resource/Material%20Request\n{\"exception\":\"erpnext.utilities.transaction_base.UOMMustBeIntegerError: Row 1: Quantity (0.016)"
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "rate",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": 120.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "stock_qty",
+      "derived_value": 4.0,
+      "supplied_value": 0.016,
+      "stored_value": 4.0,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "update_stock",
+      "derived_value": 0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
+      "fieldname": "weight_per_unit",
+      "derived_value": 0.0,
+      "supplied_value": 7.0,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": "in force_item_fields"
+    }
+  ],
+  "generated_at": "2026-09-07T19:30:41.677334+00:00",
+  "erpnext_version": "v16.34.1"
+}

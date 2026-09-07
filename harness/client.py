@@ -6,6 +6,7 @@ API-key-only code paths.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 import requests
@@ -16,9 +17,23 @@ class FrappeError(RuntimeError):
 
 
 class FrappeClient:
-    def __init__(self, base_url: str, username: str, password: str) -> None:
+    def __init__(self, base_url: str, username: str, password: str,
+                 site: str | None = None) -> None:
+        """`site` sets the Host header, which is how a Frappe bench routes to one
+        of several sites on the same containers. Set ERPNEXT_SITE to run any
+        script in this repo against a clean site instead of the shared one:
+
+            ERPNEXT_SITE=clean.local ./.venv/bin/python harness/run_corpus.py
+
+        Published numbers should come from a freshly created site. A long-lived
+        shared instance accumulates state, and every report here is a snapshot
+        of whatever that state happened to be.
+        """
         self.base_url = base_url.rstrip("/")
+        self.site = site or os.environ.get("ERPNEXT_SITE")
         self.session = requests.Session()
+        if self.site:
+            self.session.headers["Host"] = self.site
         self._login(username, password)
 
     def _login(self, username: str, password: str) -> None:

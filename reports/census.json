@@ -1,8 +1,8 @@
 {
-  "probes_run": 196,
+  "probes_run": 203,
   "by_verdict": {
-    "protected": 144,
-    "silently_accepted": 42,
+    "protected": 156,
+    "silently_accepted": 37,
     "rejected": 10
   },
   "doctypes_probed": [
@@ -19,6 +19,7 @@
   "silently_accepted_fields": [
     "discount_amount",
     "discount_percentage",
+    "last_purchase_rate",
     "min_order_qty",
     "price_list_rate",
     "rate",
@@ -34,6 +35,7 @@
     "discount_amount",
     "discount_percentage",
     "grant_commission",
+    "gross_profit",
     "has_batch_no",
     "has_margin",
     "has_serial_no",
@@ -126,6 +128,15 @@
       "derived_value": 1,
       "supplied_value": 0.004,
       "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Quotation",
+      "fieldname": "gross_profit",
+      "derived_value": -480.0,
+      "supplied_value": -1.92,
+      "stored_value": 520.0,
       "verdict": "protected",
       "note": ""
     },
@@ -240,9 +251,9 @@
     {
       "doctype": "Quotation",
       "fieldname": "valuation_rate",
-      "derived_value": 0.0,
-      "supplied_value": 7.0,
-      "stored_value": 0.0,
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": 120.0,
       "verdict": "protected",
       "note": "in force_item_fields"
     },
@@ -333,6 +344,15 @@
       "derived_value": 1,
       "supplied_value": 0.004,
       "stored_value": 1,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Sales Order",
+      "fieldname": "gross_profit",
+      "derived_value": -480.0,
+      "supplied_value": -1.92,
+      "stored_value": 520.0,
       "verdict": "protected",
       "note": ""
     },
@@ -447,9 +467,9 @@
     {
       "doctype": "Sales Order",
       "fieldname": "valuation_rate",
-      "derived_value": 0.0,
-      "supplied_value": 7.0,
-      "stored_value": 0.0,
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": 120.0,
       "verdict": "protected",
       "note": "in force_item_fields"
     },
@@ -467,7 +487,7 @@
       "fieldname": "amount",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 1000.0,
+      "stored_value": 900.0,
       "verdict": "protected",
       "note": ""
     },
@@ -476,7 +496,7 @@
       "fieldname": "base_amount",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 1000.0,
+      "stored_value": 900.0,
       "verdict": "protected",
       "note": ""
     },
@@ -494,7 +514,7 @@
       "fieldname": "base_rate",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 250.0,
+      "stored_value": 225.0,
       "verdict": "protected",
       "note": ""
     },
@@ -521,8 +541,8 @@
       "fieldname": "discount_amount",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 7.0,
-      "verdict": "silently_accepted",
+      "stored_value": 25.0,
+      "verdict": "protected",
       "note": ""
     },
     {
@@ -530,8 +550,8 @@
       "fieldname": "discount_percentage",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 7.0,
-      "verdict": "silently_accepted",
+      "stored_value": 10.0,
+      "verdict": "protected",
       "note": ""
     },
     {
@@ -593,7 +613,7 @@
       "fieldname": "net_amount",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 1000.0,
+      "stored_value": 900.0,
       "verdict": "protected",
       "note": ""
     },
@@ -602,7 +622,7 @@
       "fieldname": "net_rate",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 250.0,
+      "stored_value": 225.0,
       "verdict": "protected",
       "note": ""
     },
@@ -629,8 +649,8 @@
       "fieldname": "rate",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 7.0,
-      "verdict": "silently_accepted",
+      "stored_value": 225.0,
+      "verdict": "protected",
       "note": ""
     },
     {
@@ -665,7 +685,7 @@
       "fieldname": "amount",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 1000.0,
+      "stored_value": 900.0,
       "verdict": "protected",
       "note": ""
     },
@@ -674,7 +694,7 @@
       "fieldname": "base_amount",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 1000.0,
+      "stored_value": 900.0,
       "verdict": "protected",
       "note": ""
     },
@@ -692,7 +712,7 @@
       "fieldname": "base_rate",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 250.0,
+      "stored_value": 225.0,
       "verdict": "protected",
       "note": ""
     },
@@ -719,8 +739,8 @@
       "fieldname": "discount_amount",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 7.0,
-      "verdict": "silently_accepted",
+      "stored_value": 25.0,
+      "verdict": "protected",
       "note": ""
     },
     {
@@ -728,8 +748,8 @@
       "fieldname": "discount_percentage",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 7.0,
-      "verdict": "silently_accepted",
+      "stored_value": 10.0,
+      "verdict": "protected",
       "note": ""
     },
     {
@@ -791,7 +811,7 @@
       "fieldname": "net_amount",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 1000.0,
+      "stored_value": 900.0,
       "verdict": "protected",
       "note": ""
     },
@@ -800,7 +820,7 @@
       "fieldname": "net_rate",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 250.0,
+      "stored_value": 225.0,
       "verdict": "protected",
       "note": ""
     },
@@ -827,8 +847,8 @@
       "fieldname": "rate",
       "derived_value": 0.0,
       "supplied_value": 7.0,
-      "stored_value": 7.0,
-      "verdict": "silently_accepted",
+      "stored_value": 225.0,
+      "verdict": "protected",
       "note": ""
     },
     {
@@ -974,6 +994,15 @@
       "stored_value": null,
       "verdict": "protected",
       "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Supplier Quotation",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
     },
     {
       "doctype": "Supplier Quotation",
@@ -1166,6 +1195,15 @@
     },
     {
       "doctype": "Purchase Order",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": 0.48,
+      "verdict": "silently_accepted",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Order",
       "fieldname": "net_amount",
       "derived_value": 0.0,
       "supplied_value": 7.0,
@@ -1352,6 +1390,15 @@
       "stored_value": 0,
       "verdict": "protected",
       "note": "in force_item_fields"
+    },
+    {
+      "doctype": "Purchase Receipt",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
     },
     {
       "doctype": "Purchase Receipt",
@@ -1544,6 +1591,15 @@
     },
     {
       "doctype": "Purchase Invoice",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Purchase Invoice",
       "fieldname": "net_amount",
       "derived_value": 0.0,
       "supplied_value": 7.0,
@@ -1733,6 +1789,15 @@
     },
     {
       "doctype": "Material Request",
+      "fieldname": "last_purchase_rate",
+      "derived_value": 120.0,
+      "supplied_value": 0.48,
+      "stored_value": null,
+      "verdict": "protected",
+      "note": ""
+    },
+    {
+      "doctype": "Material Request",
       "fieldname": "min_order_qty",
       "derived_value": 0.0,
       "supplied_value": 7.0,
@@ -1813,6 +1878,6 @@
       "note": "in force_item_fields"
     }
   ],
-  "generated_at": "2026-09-07T16:23:20.744541+00:00",
+  "generated_at": "2026-09-07T19:01:03.911583+00:00",
   "erpnext_version": "v16.34.1"
 }

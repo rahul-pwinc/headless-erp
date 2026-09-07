@@ -1,0 +1,9 @@
+# Pinned to the versions this repo is verified against (./.venv, 2026-09-08).
+# requests    - harness/client.py: Frappe REST session client
+# pandas      - harness/prepare_data.py, harness/simulate.py: UCI dataset ETL/analysis
+# openpyxl    - harness/prepare_data.py: reads the UCI .xlsx source (pandas' Excel engine)
+# pyyaml      - harness/run_corpus.py, harness/corpus.py: intents/catalog.yaml, corpus/scenarios.yaml
+requests==2.34.2
+pandas==3.0.5
+openpyxl==3.1.5
+pyyaml==6.0.3

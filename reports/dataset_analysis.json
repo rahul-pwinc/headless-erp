@@ -1,4 +1,5 @@
 {
+  "generated_at": "2026-09-07T18:58:19.661862+00:00",
   "lines_analysed": 1033527,
   "at_list": 709344,
   "below_list": 104513,
@@ -8,5 +9,23 @@
   "skus_multi_price_pct": 88.42602093166427,
   "noise_lines_stripped": 6050,
   "implausible_dropped": 2093,
-  "method": "list price = median price per SKU; non-product codes and >500% deviations excluded"
+  "method": "list price = median price per SKU; non-product codes and >500% deviations excluded",
+  "median_reference": {
+    "description": "list price := median(Price) per StockCode, pooled across all customers. Partly circular for a wholesaler with two price points (wholesale + retail): a SKU split roughly evenly between them will show ~half its lines off-list by construction, independent of whether any given sale was a pricing mistake.",
+    "lines_analysed": 1033527,
+    "at_list": 709344,
+    "below_list": 104513,
+    "above_list": 219670,
+    "off_list_pct": 31.366669666104514,
+    "off_list_revenue_pct": 50.75427555338309
+  },
+  "per_customer_reference": {
+    "description": "list price := the modal (most frequent) price that THIS customer paid for THIS SKU, i.e. each customer's own usual price treated as their list. Answers 'how often does a customer pay something other than what they usually pay for this item', which is not circular in the same way the pooled-median definition is. Computed only over lines that carry a Customer ID.",
+    "lines_with_customer_id": 801418,
+    "lines_excluded_no_customer_id": 232109,
+    "at_reference": 774078,
+    "off_reference": 27340,
+    "off_list_pct": 3.41145319920441,
+    "off_list_revenue_pct": 8.695526060135107
+  }
 }

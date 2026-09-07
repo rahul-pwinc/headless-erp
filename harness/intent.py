@@ -287,15 +287,35 @@ class IntentEngine:
                 res.invariant_failures.append(
                     f"grand_total {saved['grand_total']} != net {net} + taxes {taxes}")
 
-        # An override must leave the document self-consistent: the recorded
-        # discount has to equal the delta from the untouched reference price.
+        # An override must leave the document self-consistent: the delta from the
+        # untouched reference price has to be recorded somewhere.
+        #
+        # ERPNext records it in one of two places depending on direction
+        # (transaction.js:70-90, confirmed empirically on live documents):
+        #   rate <  price_list_rate  ->  discount_amount = plr - rate
+        #   rate >  price_list_rate  ->  margin_type="Amount",
+        #                                margin_rate_or_amount = rate - plr
+        # Checking only the discount direction silently passes every premium
+        # sale. In the UCI Online Retail II data, 21.3% of real lines price
+        # ABOVE list, so the one-directional check was wrong far more often
+        # than it was right.
         for o in res.overrides:
             if o.fieldname != "rate":
                 continue
             row = items[o.row_idx] if o.row_idx < len(items) else {}
-            plr, rate = float(row.get("price_list_rate") or 0), float(row.get("rate") or 0)
-            disc = float(row.get("discount_amount") or 0)
-            res.invariants_checked.append("discount_amount == price_list_rate - rate")
-            if abs((plr - rate) - disc) >= 0.01:
+            plr = float(row.get("price_list_rate") or 0)
+            rate = float(row.get("rate") or 0)
+            delta = plr - rate
+            if abs(delta) < 0.005:
+                continue
+            if delta > 0:
+                recorded = float(row.get("discount_amount") or 0)
+                label = "discount_amount == price_list_rate - rate"
+            else:
+                recorded = -float(row.get("margin_rate_or_amount") or 0)
+                label = "margin_rate_or_amount == rate - price_list_rate"
+            res.invariants_checked.append(label)
+            if abs(delta - recorded) >= 0.01:
                 res.invariant_failures.append(
-                    f"row {o.row_idx}: discount {disc} != {plr} - {rate}")
+                    f"row {o.row_idx}: {label} violated "
+                    f"(plr={plr} rate={rate} recorded={abs(recorded)})")

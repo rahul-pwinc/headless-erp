@@ -1,0 +1,12 @@
+{
+  "lines_analysed": 1033527,
+  "at_list": 709344,
+  "below_list": 104513,
+  "above_list": 219670,
+  "off_list_pct": 31.366669666104514,
+  "off_list_revenue_pct": 50.75427555338309,
+  "skus_multi_price_pct": 88.42602093166427,
+  "noise_lines_stripped": 6050,
+  "implausible_dropped": 2093,
+  "method": "list price = median price per SKU; non-product codes and >500% deviations excluded"
+}

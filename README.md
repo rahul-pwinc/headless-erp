@@ -197,6 +197,67 @@ The corpus is the oracle the invariant approach cannot be. Consider what each la
 
 That last row is the whole project. Correctness in an ERP is defined by the business and by accounting, not by what a particular implementation happens to do.
 
+## Phase 6 — real data, at scale
+
+A single fixture item proves a mechanism. It does not prove the mechanism matters. So: [UCI Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii) — two years of a real UK wholesaler, 1,067,371 line items, 53,628 invoices, 5,305 SKUs, 5,942 customers, 43 countries, GBP 20.97M gross.
+
+### First, how often does real commerce sell off list?
+
+Treating the median price per SKU as the price list, and excluding non-product codes (postage, manual adjustments, bank charges) and deviations above 500% as data-quality noise — both exclusions stated, 8,143 lines dropped of 1,041,670:
+
+```
+  lines analysed  : 1,033,527
+  at list price   :   709,344   68.6%
+  below list      :   104,513   10.1%
+  above list      :   219,670   21.3%
+  OFF LIST        :   324,183   31.4%
+
+  revenue on off-list lines : 50.8% of gross
+  SKUs sold at more than one price : 4,309 / 4,873  (88.4%)
+```
+
+**Nearly a third of real line items do not sell at list price, and they carry half the revenue.** The deviation is bimodal — this wholesaler also sells retail, so the same SKU legitimately has two price points depending on the customer.
+
+This is the finding that makes the defect serious, and it is the opposite of what you would assume. **Off-list is not an anomaly. It is normal.**
+
+Which kills the obvious mitigation. You cannot detect a mispriced agent write by flagging prices that differ from the list, because 31.4% of correct writes differ from the list. There is no statistical signal to separate a legitimate wholesale price from an agent that never looked up the price at all. The only place the distinction exists is at the moment of writing, in whether anyone recorded a decision.
+
+### Then, replay it
+
+1,000 real invoices, written twice — once by a naive caller posting the price it holds (what an MCP server does), once through the intent layer.
+
+```
+  invoices written        : 1,000 naive + 1,000 intent
+  line items              : 4,380
+  off-list lines          : 1,091  (24.9%)
+
+  naive  -> unrecorded off-list prices : 1,091
+  intent -> recorded overrides         : 1,091
+  intent -> invariant failures         :     0
+  elapsed                              :   378s
+```
+
+Same invoices. Same totals. Same ledger. The only difference is that 1,091 line items either explain themselves or do not.
+
+### The trial balance
+
+```
+  GL entries      : 6,466
+  submitted invoices: 2,223
+  total debits    :  451,856.02
+  total credits   :  451,856.02
+  difference      :        0.00
+  BALANCED        : True
+```
+
+**Perfect.** After a thousand invoices carrying 1,091 prices that no one recorded a decision for, the books balance to the penny. Every invariant an auditor would check passes. This is the entire argument in one number: ledger integrity is not evidence of correctness, and any verification strategy built on invariants alone will report a clean bill of health on this company.
+
+### What the real data found in our own code
+
+The 21.3% of lines priced *above* list broke an invariant in `intent.py`. ERPNext records the delta in two different places depending on direction — `discount_amount` below list, `margin_rate_or_amount` above (`transaction.js:70-90`, confirmed on live documents) — and the check only knew the discount case. It passed every premium sale silently, which is the same class of bug this project exists to find, in the tool built to find it.
+
+The fixture data could never have surfaced it. Real distributions did.
+
 ## Run it
 
 ```bash
@@ -206,6 +267,7 @@ docker compose -f docker/pwd.yml -p headless-erp up -d      # ~5 min first run
 ./.venv/bin/python harness/run_census.py   # Phase 2: silent-acceptance census
 ./.venv/bin/python harness/prove_intent.py # Phase 4: the contract, 7 cases
 ./.venv/bin/python harness/run_corpus.py   # Phase 5: the corpus, 39 scenarios
+./.venv/bin/python harness/simulate.py     # Phase 6: replay real invoices at scale
 ```
 
 Defaults to `http://localhost:8080`, `Administrator` / `admin`. Report lands in `reports/latest.json`.
@@ -222,6 +284,7 @@ harness/intent.py     Phase 4 - the intent executor (refuse / override / derive)
 harness/corpus.py     Phase 5 - scenario engine, asserts on accounting principles
 intents/catalog.yaml  11 business intents, 27 invariants
 corpus/scenarios.yaml 39 accounting-determined scenarios
+harness/simulate.py   Phase 6 - replays UCI Online Retail II through both paths
 docker/pwd.yml        ERPNext v16.34.1 stack
 ```
 

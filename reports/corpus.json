@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-09-07T19:01:43.774238+00:00",
+  "generated_at": "2026-09-07T19:17:16.052492+00:00",
   "erpnext_version": "v16.34.1",
-  "passed": 29,
+  "passed": 39,
   "total": 39,
   "by_category": {
     "order_to_cash": {
-      "passed": 2,
+      "passed": 6,
       "total": 6
     },
     "commitments": {
@@ -13,7 +13,7 @@
       "total": 5
     },
     "collection": {
-      "passed": 3,
+      "passed": 7,
       "total": 7
     },
     "procure_to_pay": {
@@ -21,7 +21,7 @@
       "total": 5
     },
     "derivation_contract": {
-      "passed": 8,
+      "passed": 10,
       "total": 10
     },
     "returns": {
@@ -38,13 +38,10 @@
       "id": "otc-01-invoice-creates-receivable",
       "category": "order_to_cash",
       "principle": "Issuing an invoice recognises revenue and creates a receivable of equal value.",
-      "passed": false,
-      "failures": [
-        "gl: debit on 'Debtors' expected 1000.0, got 900.0 (accounts seen: ['Debtors - HTC', 'Sales - HTC'])",
-        "gl: credit on 'Sales' expected 1000.0, got 900.0 (accounts seen: ['Debtors - HTC', 'Sales - HTC'])"
-      ],
+      "passed": true,
+      "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02338"
+        "Sales Invoice/ACC-SINV-2026-02963"
       ],
       "notes": []
     },
@@ -55,7 +52,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02339"
+        "Sales Invoice/ACC-SINV-2026-02964"
       ],
       "notes": []
     },
@@ -63,12 +60,10 @@
       "id": "otc-03-total-is-price-times-qty",
       "category": "order_to_cash",
       "principle": "With no discount, the invoice total is the agreed unit price times quantity.",
-      "passed": false,
-      "failures": [
-        "grand_total: expected 1000, got 900.0"
-      ],
+      "passed": true,
+      "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02340"
+        "Sales Invoice/ACC-SINV-2026-02965"
       ],
       "notes": []
     },
@@ -76,12 +71,10 @@
       "id": "otc-04-outstanding-starts-at-total",
       "category": "order_to_cash",
       "principle": "Before any collection, the whole invoice is outstanding.",
-      "passed": false,
-      "failures": [
-        "outstanding: expected 1000, got 900.0"
-      ],
+      "passed": true,
+      "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02341"
+        "Sales Invoice/ACC-SINV-2026-02966"
       ],
       "notes": []
     },
@@ -92,7 +85,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02342"
+        "Sales Invoice/ACC-SINV-2026-02967"
       ],
       "notes": []
     },
@@ -100,12 +93,10 @@
       "id": "otc-06-multi-line-sums",
       "category": "order_to_cash",
       "principle": "The document total is the sum of its lines. No line is silently dropped.",
-      "passed": false,
-      "failures": [
-        "grand_total: expected 1250, got 1125.0"
-      ],
+      "passed": true,
+      "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02344"
+        "Sales Invoice/ACC-SINV-2026-02968"
       ],
       "notes": []
     },
@@ -116,7 +107,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Quotation/SAL-QTN-2026-00061"
+        "Quotation/SAL-QTN-2026-00067"
       ],
       "notes": []
     },
@@ -127,7 +118,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Order/SAL-ORD-2026-00053"
+        "Sales Order/SAL-ORD-2026-00056"
       ],
       "notes": []
     },
@@ -138,7 +129,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Order/PUR-ORD-2026-00047"
+        "Purchase Order/PUR-ORD-2026-00049"
       ],
       "notes": []
     },
@@ -149,7 +140,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Material Request/MAT-MR-2026-00049"
+        "Material Request/MAT-MR-2026-00051"
       ],
       "notes": []
     },
@@ -160,7 +151,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Quotation/SAL-QTN-2026-00062"
+        "Quotation/SAL-QTN-2026-00068"
       ],
       "notes": []
     },
@@ -168,12 +159,11 @@
       "id": "col-01-full-payment-clears",
       "category": "collection",
       "principle": "Paying an invoice in full leaves nothing outstanding.",
-      "passed": false,
-      "failures": [
-        "unexpected refusal: collect: allocating 1000.0 to ACC-SINV-2026-02345 exceeds its outstanding of 900.0."
-      ],
+      "passed": true,
+      "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02345"
+        "Sales Invoice/ACC-SINV-2026-02969",
+        "Payment Entry/ACC-PAY-2026-00052"
       ],
       "notes": []
     },
@@ -181,13 +171,11 @@
       "id": "col-02-partial-payment-leaves-remainder",
       "category": "collection",
       "principle": "A part payment reduces the receivable by exactly what was paid, no more.",
-      "passed": false,
-      "failures": [
-        "outstanding: expected 600, got 500.0"
-      ],
+      "passed": true,
+      "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02346",
-        "Payment Entry/ACC-PAY-2026-00039"
+        "Sales Invoice/ACC-SINV-2026-02970",
+        "Payment Entry/ACC-PAY-2026-00053"
       ],
       "notes": []
     },
@@ -198,8 +186,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02347",
-        "Payment Entry/ACC-PAY-2026-00040"
+        "Sales Invoice/ACC-SINV-2026-02971",
+        "Payment Entry/ACC-PAY-2026-00054"
       ],
       "notes": []
     },
@@ -207,12 +195,11 @@
       "id": "col-04-payment-posts-bank-and-debtors",
       "category": "collection",
       "principle": "Collecting cash converts a receivable into cash. It does not create revenue.",
-      "passed": false,
-      "failures": [
-        "unexpected refusal: collect: allocating 1000.0 to ACC-SINV-2026-02348 exceeds its outstanding of 900.0."
-      ],
+      "passed": true,
+      "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02348"
+        "Sales Invoice/ACC-SINV-2026-02972",
+        "Payment Entry/ACC-PAY-2026-00055"
       ],
       "notes": []
     },
@@ -223,10 +210,10 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02349"
+        "Sales Invoice/ACC-SINV-2026-02973"
       ],
       "notes": [
-        "refused: collect: allocating 5000.0 to ACC-SINV-2026-02349 exceeds its outstanding of 900.0."
+        "refused: collect: allocating 5000.0 to ACC-SINV-2026-02973 exceeds its outstanding of 1000.0."
       ]
     },
     {
@@ -236,23 +223,22 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02350"
+        "Sales Invoice/ACC-SINV-2026-02974"
       ],
       "notes": [
-        "refused: collect: outstanding is derived from ACC-SINV-2026-02350, not supplied."
+        "refused: collect: outstanding is derived from ACC-SINV-2026-02974, not supplied."
       ]
     },
     {
       "id": "col-07-two-partials-settle",
       "category": "collection",
       "principle": "Successive part payments settle an invoice exactly. Rounding never creates or destroys money.",
-      "passed": false,
-      "failures": [
-        "unexpected refusal: collect: allocating 666.67 to ACC-SINV-2026-02351 exceeds its outstanding of 566.67."
-      ],
+      "passed": true,
+      "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02351",
-        "Payment Entry/ACC-PAY-2026-00041"
+        "Sales Invoice/ACC-SINV-2026-02975",
+        "Payment Entry/ACC-PAY-2026-00056",
+        "Payment Entry/ACC-PAY-2026-00057"
       ],
       "notes": []
     },
@@ -263,7 +249,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00068"
+        "Purchase Invoice/ACC-PINV-2026-00079"
       ],
       "notes": []
     },
@@ -274,7 +260,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00069"
+        "Purchase Invoice/ACC-PINV-2026-00080"
       ],
       "notes": []
     },
@@ -285,8 +271,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00070",
-        "Payment Entry/ACC-PAY-2026-00042"
+        "Purchase Invoice/ACC-PINV-2026-00081",
+        "Payment Entry/ACC-PAY-2026-00058"
       ],
       "notes": []
     },
@@ -297,8 +283,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00071",
-        "Payment Entry/ACC-PAY-2026-00043"
+        "Purchase Invoice/ACC-PINV-2026-00082",
+        "Payment Entry/ACC-PAY-2026-00059"
       ],
       "notes": []
     },
@@ -309,10 +295,10 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00072"
+        "Purchase Invoice/ACC-PINV-2026-00083"
       ],
       "notes": [
-        "refused: pay: allocating 9999.0 to ACC-PINV-2026-00072 exceeds its outstanding of 480.0."
+        "refused: pay: allocating 9999.0 to ACC-PINV-2026-00083 exceeds its outstanding of 480.0."
       ]
     },
     {
@@ -352,12 +338,10 @@
       "id": "der-04-rate-override-with-reason-allowed",
       "category": "derivation_contract",
       "principle": "A business may genuinely discount. The record must show it did so deliberately.",
-      "passed": false,
-      "failures": [
-        "grand_total: expected 4, got 900.0"
-      ],
+      "passed": true,
+      "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02352"
+        "Sales Invoice/ACC-SINV-2026-02976"
       ],
       "notes": []
     },
@@ -409,12 +393,10 @@
       "id": "der-09-override-keeps-document-consistent",
       "category": "derivation_contract",
       "principle": "An override must leave the document internally consistent, not merely accepted.",
-      "passed": false,
-      "failures": [
-        "grand_total: expected 800, got 900.0"
-      ],
+      "passed": true,
+      "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02353"
+        "Sales Invoice/ACC-SINV-2026-02977"
       ],
       "notes": []
     },
@@ -469,7 +451,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Quotation/SAL-QTN-2026-00063"
+        "Quotation/SAL-QTN-2026-00069"
       ],
       "notes": []
     },
@@ -480,7 +462,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02354"
+        "Sales Invoice/ACC-SINV-2026-02978"
       ],
       "notes": []
     },
@@ -491,7 +473,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-02355"
+        "Sales Invoice/ACC-SINV-2026-02979"
       ],
       "notes": []
     }

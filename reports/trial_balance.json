@@ -1,8 +1,49 @@
 {
-  "gl_entries": 6466,
-  "total_debits": 451856.02,
-  "total_credits": 451856.02,
+  "generated_at": "2026-09-07T19:17:40.378180+00:00",
+  "company": "Headless Test Co",
+  "gl_entries": 8346,
+  "submitted_invoices": 2876,
+  "total_debits": 717378.18,
+  "total_credits": 717378.18,
   "difference": 0.0,
   "balanced": true,
-  "submitted_invoices": 2223
+  "by_account": {
+    "Debtors - HTC": {
+      "debit": 667022.84,
+      "credit": 23866.660000000003
+    },
+    "Round Off - HTC": {
+      "debit": 318.6799999999995,
+      "credit": 321.92999999999915
+    },
+    "Sales - HTC": {
+      "debit": 0.0,
+      "credit": 595965.5899999987
+    },
+    "Creditors - HTC": {
+      "debit": 5280.0,
+      "credit": 19200.0
+    },
+    "Interest Income - HTC": {
+      "debit": 0.0,
+      "credit": 71054.0
+    },
+    "Cost of Goods Sold - HTC": {
+      "debit": 19890.0,
+      "credit": 0.0
+    },
+    "Cash - HTC": {
+      "debit": 23866.66,
+      "credit": 5280.0
+    },
+    "Stock In Hand - HTC": {
+      "debit": 1000.0,
+      "credit": 690.0
+    },
+    "Stock Received But Not Billed - HTC": {
+      "debit": 0.0,
+      "credit": 1000.0
+    }
+  },
+  "caveat": "Guaranteed by construction: ERPNext raises raise_debit_credit_not_equal_error before posting. This artifact demonstrates that balance is enforced, therefore uninformative."
 }

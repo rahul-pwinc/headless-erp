@@ -99,8 +99,9 @@ def main() -> int:
               f"grand_total={res.grand_total}  invariant_failures={len(res.invariant_failures)}")
         for rec in recs:
             print(f"      -> {rec['name']}  {rec['fieldname']} row {rec['row_idx']}  "
-                  f"{rec['derived_num']} -> {rec['supplied_num']}  "
-                  f"delta {rec['value_delta']}  docstatus={rec['docstatus']}")
+                  f"derived {rec['derived_num']} / requested {rec['requested_num']} "
+                  f"/ STORED {rec['stored_num']}  eff.delta {rec['value_delta']}  "
+                  f"drift={rec['drift']}")
         return res
 
     run("a. discount: sold below list",
@@ -128,7 +129,24 @@ def main() -> int:
                     [{"field": "rate", "value": round(lp * 0.25, 2),
                       "reason": "keyed from the wrong contract; will be reissued"}], BOT)
 
-    head("2.  LIFECYCLE — cancel that document, then amend it")
+    # ---------------------------------------------------------------- drift
+    head("2.  DRIFT — a Pricing Rule overrides the override, and the record says so")
+    print("  ERPNext applies Pricing Rules during validate, AFTER the intent layer has")
+    print("  set the rate. A record built from what the caller intended would assert a")
+    print("  decision that never took effect. This one is built from the saved document.\n")
+    drift_res = _with_pricing_rule(c, lambda: run(
+        "f. explicit override of 1.0, with a 10% Pricing Rule live",
+        [{"item_code": item, "qty": 4}],
+        [{"field": "rate", "value": 1.0,
+          "reason": "goodwill credit, approved by finance"}], BOT))
+    if drift_res:
+        stored = c.get_doc("Sales Invoice", drift_res.name)["items"][0]["rate"]
+        print(f"\n  the document actually stored rate={stored}, not the requested 1.0.")
+        print(f"  the intent engine still believes it wrote "
+              f"{drift_res.overrides[0].supplied_value} — that is exactly the lie the")
+        print("  three-value schema exists to catch.")
+
+    head("3.  LIFECYCLE — cancel that document, then amend it")
     c.call("frappe.client.cancel", doctype="Sales Invoice", name=to_cancel.name)
     print(f"  cancelled {to_cancel.name}")
     print(f"  the override record for it still exists: "
@@ -140,54 +158,73 @@ def main() -> int:
         recs = audit.record_result(c, amended, actor=BOT)
         for rec in recs:
             print(f"      -> {rec['name']}  {rec['fieldname']}  "
-                  f"{rec['derived_num']} -> {rec['supplied_num']}")
+                  f"derived {rec['derived_num']} / requested {rec['requested_num']} "
+                  f"/ STORED {rec['stored_num']}  drift={rec['drift']}")
 
     # ----------------------------------------------------------------- queries
-    head("3.  QUERY — 'every override on any document in period X, "
+    head("4.  QUERY — 'every override on any document in period X, "
          "by field, with reason and who made it'")
     print(f"  audit.overrides_in_period(client, '2026-09-01', '2026-09-30')\n")
     period = audit.overrides_in_period(c, "2026-09-01", "2026-09-30")
     print(audit.format_rows(period))
     print(f"\n  {len(period)} override(s) in the period.")
 
-    head("4.  QUERY — narrowed: one field, one actor")
+    head("5.  QUERY — narrowed: one field, one actor")
     print("  audit.overrides_in_period(..., fieldname='rate', actor='agent:pricing-bot@1.4')\n")
     print(audit.format_rows(
         audit.overrides_in_period(c, "2026-09-01", "2026-09-30",
                                   fieldname="rate", actor=BOT)))
 
-    head("5.  QUERY — aggregate by field (server-side GROUP BY)")
+    head("6.  QUERY — aggregate by field (server-side GROUP BY)")
     print("  audit.overrides_by_field(client, '2026-09-01', '2026-09-30')\n")
     by_field = audit.overrides_by_field(c, "2026-09-01", "2026-09-30")
-    print(f"  {'FIELD':<16}{'TARGET DOCTYPE':<20}{'COUNT':>7}{'NET DELTA':>14}"
-          f"{'MIN':>12}{'MAX':>12}")
-    print("  " + "-" * 79)
+    print(f"  {'FIELD':<10}{'TARGET DOCTYPE':<16}{'DRIFT':<12}{'COUNT':>7}"
+          f"{'NET EFF.DELTA':>15}{'MIN':>10}{'MAX':>10}{'NET DRIFT':>12}")
+    print("  " + "-" * 92)
     for row in by_field:
-        print(f"  {row.get('fieldname', ''):<16}{row.get('target_doctype', ''):<20}"
-              f"{row.get('n', 0):>7}{float(row.get('net_delta') or 0):>14,.2f}"
-              f"{float(row.get('min_delta') or 0):>12,.2f}"
-              f"{float(row.get('max_delta') or 0):>12,.2f}")
+        print(f"  {row.get('fieldname', ''):<10}{row.get('target_doctype', ''):<16}"
+              f"{row.get('drift', ''):<12}{row.get('n', 0):>7}"
+              f"{float(row.get('net_delta') or 0):>15,.2f}"
+              f"{float(row.get('min_delta') or 0):>10,.2f}"
+              f"{float(row.get('max_delta') or 0):>10,.2f}"
+              f"{float(row.get('net_drift') or 0):>12,.2f}")
     print("\n  by actor:")
     for row in audit.overrides_by_actor(c, "2026-09-01", "2026-09-30"):
         print(f"    {row.get('actor', ''):<28}{row.get('actor_kind', ''):<8}"
-              f"n={row.get('n', 0):<4} net_delta={float(row.get('net_delta') or 0):,.2f}")
+              f"{row.get('drift', ''):<11}n={row.get('n', 0):<4} "
+              f"net_delta={float(row.get('net_delta') or 0):,.2f}")
 
-    head("6.  QUERY — one document's history, following the amendment lineage")
+    head("7.  QUERY — 'show me every override that did not actually take effect'")
+    print("  audit.overrides_with_drift(client, '2026-09-01', '2026-09-30')\n")
+    drifted = audit.overrides_with_drift(c, "2026-09-01", "2026-09-30")
+    print(audit.format_rows(drifted))
+    print("\n  by drift state:")
+    for row in audit.overrides_by_drift(c, "2026-09-01", "2026-09-30"):
+        print(f"    {row.get('drift', ''):<14}n={row.get('n', 0):<4} "
+              f"net_drift={float(row.get('net_drift') or 0):,.2f}")
+
+    head("8.  QUERY — one document's history, following the amendment lineage")
     fam = audit.overrides_for_doc(c, "Sales Invoice", to_cancel.name)
     print(f"  audit.overrides_for_doc(client, 'Sales Invoice', '{to_cancel.name}')\n")
     print(audit.format_rows(fam))
 
-    head("7.  IMMUTABILITY — try to edit, then delete, a submitted record")
+    head("9.  IMMUTABILITY — try to edit, then delete, a submitted record")
     if period:
         victim = c.get_doc(audit.DOCTYPE, period[0]["name"])
         for what, fn in (
             ("edit the reason", lambda: _edit(c, victim, "reason", "actually it was fine")),
-            ("edit the supplied value", lambda: _edit(c, victim, "supplied_num", 0.01)),
+            ("edit the stored value", lambda: _edit(c, victim, "stored_num", 0.01)),
+            # Must differ from what the record already holds: Frappe compares
+            # against the stored value, so re-saving an identical value is a
+            # no-op that succeeds and would read as a false alarm.
+            ("edit the drift flag",
+             lambda: _edit(c, victim, "drift",
+                           "changed" if victim.get("drift") != "changed" else "none")),
             ("DELETE the record", lambda: _delete(c, victim["name"])),
         ):
             print(f"  {what:<30} -> {fn()}")
 
-    head("8.  INTEGRITY — recompute the hash chain")
+    head("10.  INTEGRITY — recompute the hash chain")
     v = audit.verify_chain(c)
     print(f"  records={v['records']}  ok={v['ok']}")
     print(f"  tampered={len(v['tampered'])} broken={len(v['broken'])} "
@@ -232,7 +269,7 @@ def _boundary_demo(c, url):
     metadata and other processes were driving this instance at the time. The
     mechanism is identical; only the target differs.
     """
-    head("10.  BOUNDARY — the permlevel gate that stops a caller skipping the intent layer")
+    head("12.  BOUNDARY — the permlevel gate that stops a caller skipping the intent layer")
     _boundary_cleanup(c)
     if not c.exists("Role", PROBE_ROLE):
         c.insert({"doctype": "Role", "role_name": PROBE_ROLE, "desk_access": 1})
@@ -298,7 +335,7 @@ def _tamper_demo(c, period):
     if not sql:
         print("\n  --tamper skipped: docker compose stack not reachable")
         return
-    head("9.  TAMPER — raw SQL against MariaDB, underneath Frappe entirely")
+    head("11.  TAMPER — raw SQL against MariaDB, underneath Frappe entirely")
     victim = period[-1]["name"]
     before = c.get_doc(audit.DOCTYPE, victim)["reason"]
     print(f"  UPDATE `tab{audit.DOCTYPE}` SET reason='...' WHERE name='{victim}'")
@@ -387,6 +424,31 @@ def _reset(c):
         n += 1
     c.session.delete(f"{c.base_url}/api/resource/DocType/{audit.DOCTYPE}")
     print(f"  --reset: destroyed {n} record(s) and the DocType itself")
+
+
+PRICING_RULE = "PRLE-0001"
+
+
+def _with_pricing_rule(c, fn):
+    """Enable the 10% Pricing Rule for exactly one call, then put it back.
+
+    The rule already exists on this instance and is left disabled, because it
+    is global metadata on a shared site: while it is on, every Sales Invoice
+    anyone creates is repriced. So it is enabled for one document and disabled
+    again in a finally, even if the call raises.
+    """
+    if not c.exists("Pricing Rule", PRICING_RULE):
+        print(f"  skipped: Pricing Rule {PRICING_RULE} not present on this instance")
+        return None
+    c.call("frappe.client.set_value", doctype="Pricing Rule", name=PRICING_RULE,
+           fieldname="disable", value=0)
+    print(f"  enabled Pricing Rule {PRICING_RULE} (10% discount) for one document")
+    try:
+        return fn()
+    finally:
+        c.call("frappe.client.set_value", doctype="Pricing Rule", name=PRICING_RULE,
+               fieldname="disable", value=1)
+        print(f"  disabled Pricing Rule {PRICING_RULE} again")
 
 
 def _amend(c, name, eng, hdr, item, lp):

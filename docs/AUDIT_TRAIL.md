@@ -34,13 +34,14 @@ worth being precise about why, because each failure points at a requirement:
 | No timestamp of its own | Only the document's `modified`, which every later edit overwrites. |
 | Mutable whenever the document is | `remarks` is an ordinary field, so on any draft (`submit=False`) the "record" can be rewritten through the same API that wrote it. It is frozen on submit only as a side effect of the *document* being frozen, not by any property of the record. |
 | Dies with the document | Delete the draft, lose the history. |
+| **Written from intent, not from the document** | The string is built before `insert`, from what the intent layer decided. ERPNext then runs `validate` and can change it. The record survives as a confident, immutable account of a decision that never took effect. This is the worst of the eight, and §2.3 is about it. |
 
 The replacement is `harness/audit.py`: a standalone, submittable, hash-chained
 DocType, created through the REST API, one row per overridden field.
 
 ---
 
-## 2. Two design choices, argued
+## 2. Three design choices, argued
 
 ### 2.1 Standalone DocType, not a child table on the voucher
 
@@ -105,6 +106,78 @@ cancelled" is not stored — it is resolved at query time (§5). That is the poi
 The log holds only facts that were true when the override was made and that can
 never become false.
 
+### 2.3 Three values, because two is a lie
+
+This is the correction that matters most, and it was learned by shipping the
+wrong thing first.
+
+The obvious schema has two value columns: what the server **derived**, and what
+the caller **requested**. That pair is a complete account of what the intent
+layer decided — and ERPNext is under no obligation to agree with it.
+
+A `Pricing Rule` on this instance (`PRLE-0001`, 10% off `HL-WIDGET-001`) runs
+during `validate`, which is *after* the intent layer has set the rate on the
+document. It rewrote a line from 250 to 225, silently discarding an explicit,
+reasoned override of 1.0. The record built from intent said:
+
+```
+derived 250.0  ->  charged 1.0    reason: goodwill credit, approved by finance
+```
+
+The document said `225.0`. Every field in that record was written in good
+faith, and the record as a whole was false — and immutable, and hash-chained,
+and signed with an actor and a timestamp. A confident lie is worse than no
+record, because someone will rely on it.
+
+So there are three value columns, not two, and the writer reads the persisted
+document back after `insert` **and** `submit` to populate the third:
+
+| Column | Source | What it tells you |
+|---|---|---|
+| `derived_value` | the price list, before the caller was consulted | the baseline |
+| `requested_value` | the caller | what was asked for, and the only column the caller determines |
+| `stored_value` | **the saved document, read back** | what is actually on the books |
+
+Plus a verdict:
+
+| Column | Meaning |
+|---|---|
+| `drift` | `none` \| `changed` \| `unverified` — indexed and filterable |
+| `drift_delta` | `stored - requested`. Zero when the decision took effect. |
+| `drift_note` | why, in words, for the auditor who is not going to diff two floats |
+| `value_delta` | `stored - derived`. **What actually reached the books** — the number that ties to the ledger, which is not the same as what was requested. |
+
+`drift` is three-valued on purpose. `none` and `changed` are both assessments;
+`unverified` means the read-back could not locate the field and **no claim is
+being made**. Collapsing that third state into `none` would turn an unknown
+into a clean bill of health, which is the same class of error as the original
+defect.
+
+Verified live — the same scenario that produced the bug, now recorded correctly:
+
+```
+  f. explicit override of 1.0, with a 10% Pricing Rule live
+      Sales Invoice ACC-SINV-2026-02962  docstatus=1 grand_total=900.0
+      -> IOV-2026-09-00088  rate row 0
+         derived 250.0 / requested 1.0 / STORED 225.0  eff.delta -25.0  drift=changed
+```
+
+Note `eff.delta -25.0`, not `-249.0`. The effective delta is measured against
+what the document holds, so it agrees with the general ledger; the requested
+value is recorded as a fact about the caller, not as a fact about the books.
+
+The read-back happens once per document in `record_result` and is shared across
+every override on it, so the three-value schema costs one extra `GET` per
+document, not one per field.
+
+**One consequence to know before writing your own queries.** Frappe stores a
+`Float` with no value as `0.0`, not `NULL`. An `unverified` record therefore has
+`stored_num = 0.0`, numerically indistinguishable from one whose stored value
+really was zero. The text column `stored_value` stays `NULL` and `drift` says
+`unverified`, so the truth is on the record — but any `SUM` over `stored_num` or
+`value_delta` must be split by `drift` first. `overrides_by_field` and
+`overrides_by_actor` both group by `drift` for exactly this reason.
+
 ---
 
 ## 3. Schema
@@ -161,16 +234,22 @@ the caller's label.
 |---|---|---|
 | `fieldname` | Data | indexed, standard filter |
 | `derived_value` | Small Text | canonical text of what the **server** computed |
-| `supplied_value` | Small Text | canonical text of what the **caller** asked for |
-| `is_numeric` | Check | set when both sides parse as numbers |
-| `derived_num`, `supplied_num` | Float(6) | numeric mirrors, so the values are summable |
-| `value_delta` | Float(6) | `supplied - derived`, **signed** |
+| `requested_value` | Small Text | canonical text of what the **caller** asked for |
+| `stored_value` | Small Text | canonical text of what the **saved document holds** |
+| `is_numeric` | Check | set when derived and stored both parse as numbers |
+| `derived_num`, `requested_num`, `stored_num` | Float(6) | numeric mirrors, so the values are summable |
+| `value_delta` | Float(6) | `stored - derived`, **signed** — the effect on the books |
+| `drift` | Select | `none` / `changed` / `unverified`, indexed, standard filter |
+| `drift_delta` | Float(6) | `stored - requested` |
+| `drift_note` | Small Text | prose explanation when drift is not `none` |
 
 Two representations on purpose. The text columns are lossless for any field
 type — an override of `item_tax_template` is a string. The numeric mirrors make
 the money question a `SUM`. `value_delta` is signed because Phase 6 found that
 21.3% of real lines in the UCI Online Retail II data price *above* list: an
-unsigned "discount" column would misclassify one line in five.
+unsigned "discount" column would misclassify one line in five. And it is
+measured `stored - derived` rather than `requested - derived` so that it ties
+to the general ledger rather than to the caller's intentions — see §2.3.
 
 ### Justification, actor, integrity
 
@@ -224,10 +303,13 @@ insert — the write bit buys its holder nothing.
 ```python
 overrides_in_period(client, from_date, to_date, *, basis="posting",
                     fieldname=None, target_doctype=None, actor=None,
-                    company=None, resolve=True)
+                    company=None, drift=None, resolve=True)
 overrides_for_doc(client, target_doctype, target_name, *, follow_amendments=True)
+overrides_with_drift(client, from_date=None, to_date=None, *,
+                     include_unverified=True)
 overrides_by_field(client, from_date=None, to_date=None, *, basis="posting")
 overrides_by_actor(client, from_date=None, to_date=None, *, basis="posting")
+overrides_by_drift(client, from_date=None, to_date=None, *, basis="posting")
 resolve_targets(client, rows)
 verify_chain(client)
 ```
@@ -248,21 +330,23 @@ audit.overrides_in_period(client, "2026-09-01", "2026-09-30")
 Real output:
 
 ```
-  DATE       TARGET                       ROW  FIELD        DERIVED ->   SUPPLIED     DELTA  STATE     ACTOR                     REASON
-  -------------------------------------------------------------------------------------------------------------------------------------
-  2026-09-08 SA ACC-SINV-2026-02826         0  rate          250.00 ->     150.00   -100.00  submitted agent:pricing-bot@1.4     goodwill credit, approved by finance (ticket FIN-8812)
-  2026-09-08 SA ACC-SINV-2026-02828         0  rate          250.00 ->     337.50     87.50  submitted agent:pricing-bot@1.4     expedited freight priced into the line, per contract clause 7
-  2026-09-08 SA ACC-SINV-2026-02830         1  rate          250.00 ->     125.00   -125.00  submitted agent:pricing-bot@1.4     volume tier 3 applied manually; price list not yet updated
-  2026-09-08 SA ACC-SINV-2026-02832         0  rate          250.00 ->     225.00    -25.00  submitted human:priya@finance       matched competitor quote, verbal approval from CFO
-  2026-09-08 SA ACC-SINV-2026-02834         0  rate          250.00 ->      62.50   -187.50  cancelled agent:pricing-bot@1.4     keyed from the wrong contract; will be reissued
-               ↳ target moved submitted -> cancelled since the override; amended by ACC-SINV-2026-02834-1
-  2026-09-08 SA ACC-SINV-2026-02834-1       0  rate          250.00 ->     187.50    -62.50  submitted agent:pricing-bot@1.4     reissue of the mis-keyed invoice, correct contract rate
+  DATE       TARGET                       ROW  FIELD        DERIVED   REQUESTED    STORED  EFF.DELTA  DRIFT      STATE     ACTOR                     REASON
+  ---------------------------------------------------------------------------------------------------------------------------------------------------------
+  2026-09-08 SA ACC-SINV-2026-02957         0  rate          250.00      150.00    150.00    -100.00  none       submitted agent:pricing-bot@1.4     goodwill credit, approved by finance (ticket FIN-8812)
+  2026-09-08 SA ACC-SINV-2026-02958         0  rate          250.00      337.50    337.50      87.50  none       submitted agent:pricing-bot@1.4     expedited freight priced into the line, per contract clause 7
+  2026-09-08 SA ACC-SINV-2026-02959         1  rate          250.00      125.00    125.00    -125.00  none       submitted agent:pricing-bot@1.4     volume tier 3 applied manually; price list not yet updated
+  2026-09-08 SA ACC-SINV-2026-02960         0  rate          250.00      225.00    225.00     -25.00  none       submitted human:priya@finance       matched competitor quote, verbal approval from CFO
+  2026-09-08 SA ACC-SINV-2026-02961         0  rate          250.00       62.50     62.50    -187.50  none       cancelled agent:pricing-bot@1.4     keyed from the wrong contract; will be reissued
+               ↳ target moved submitted -> cancelled since the override; amended by ACC-SINV-2026-02961-1
+  2026-09-08 SA ACC-SINV-2026-02961-1       0  rate          250.00      187.50    187.50     -62.50  none       submitted agent:pricing-bot@1.4     reissue of the mis-keyed invoice, correct contract rate
+  2026-09-08 SA ACC-SINV-2026-02962         0  rate          250.00        1.00    225.00     -25.00  changed    submitted agent:pricing-bot@1.4     goodwill credit, approved by finance
+               !! the saved document holds 225.0 where 1.0 was requested (delta +224). Another ERPNext mechanism — a Pricing Rule, a tax or currency rule, or a server hook — overrode the recorded decision after the intent layer applied it.
 
-  6 override(s) in the period.
+  7 override(s) in the period.
 ```
 
 Note row 3: `row_idx = 1` on a two-line invoice. The semicolon string could not
-express that.
+express that. Note the last row: requested 1.00, stored 225.00, flagged.
 
 ### Aggregate, server-side
 
@@ -271,14 +355,21 @@ audit.overrides_by_field(client, "2026-09-01", "2026-09-30")
 ```
 
 ```
-  FIELD           TARGET DOCTYPE        COUNT     NET DELTA         MIN         MAX
-  -------------------------------------------------------------------------------
-  rate            Sales Invoice             6       -412.50     -187.50       87.50
+  FIELD     TARGET DOCTYPE  DRIFT         COUNT  NET EFF.DELTA       MIN       MAX   NET DRIFT
+  --------------------------------------------------------------------------------------------
+  rate      Sales Invoice   changed           1         -25.00    -25.00    -25.00      224.00
+  rate      Sales Invoice   none              6        -412.50   -187.50     87.50        0.00
 
   by actor:
-    agent:pricing-bot@1.4       Agent   n=5    net_delta=-387.50
-    human:priya@finance         Human   n=1    net_delta=-25.00
+    agent:pricing-bot@1.4       Agent   changed    n=1    net_delta=-25.00
+    agent:pricing-bot@1.4       Agent   none       n=5    net_delta=-387.50
+    human:priya@finance         Human   none       n=1    net_delta=-25.00
 ```
+
+Both aggregates group by `drift` — not for tidiness, but because of the
+NULL-Float behaviour described in §2.3: an `unverified` record folded into the
+same bucket contributes a silent zero and reads as "this override moved
+nothing".
 
 This is a `GROUP BY` executed in MariaDB, not a Python loop over fetched rows.
 One implementation note: Frappe 16 rejects SQL functions written as strings in

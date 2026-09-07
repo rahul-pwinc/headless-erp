@@ -77,34 +77,87 @@ Idempotent: re-running it produces byte-identical `sales_clean.csv` and the
 same `dataset_analysis.json` numbers (verified 2026-09-08 — regenerated
 file diffs empty against the previously committed one).
 
-### The off-list number, both ways
+### The off-list number, four ways
 
-`dataset_analysis.json` now reports two independent answers to "how often
-does real commerce sell off list", because the obvious definition of
-"list price" is partly circular:
+`dataset_analysis.json` reports four independent answers to "how often does
+real commerce sell off list", because the obvious definition of "list price"
+is partly circular:
 
-| reference definition | off-list lines | off-list revenue |
-|---|---|---|
-| **median_reference** — median price per SKU, pooled across all customers (the README headline number) | 31.4% | 50.8% |
-| **per_customer_reference** — each customer's own modal price for that SKU, i.e. "did this customer pay what they usually pay" | 3.4% | 8.7% |
+| reference definition | lines | off-list lines | off-list revenue |
+|---|---|---|---|
+| **median_reference** — median price per SKU, pooled across all customers (the README headline number) | 1,033,527 | 31.4% | 50.8% |
+| **per_customer_reference** — each customer's own modal price for that SKU, i.e. "did this customer pay what they usually pay" | 801,418 | 3.4% | 8.7% |
+| **per_customer_reference_excl_single_purchase** — same, excluding (SKU, customer) pairs bought exactly once | 457,813 | 6.0% | 13.1% |
+| **per_customer_reference_min6_purchases** — same, restricted to pairs bought 6+ times | 139,690 | 8.9% | 17.9% |
 
-Both are computed by `prepare_data.py` and written side by side under those
-exact keys. Neither is asserted to be "the" right answer here — that's a
-framing choice, not a data fact, and the reader should see both. The gap
-between them (31.4% vs 3.4%) is itself informative: most of the pooled-median
-"off-list" rate is the wholesale/retail split the README already calls out,
-not evidence of mispriced or unrecorded writes at the individual-customer
-level. The per-customer number is computed only over the 801,418 (of
-1,033,527) lines that carry a Customer ID; 232,109 anonymous lines are
-excluded from it, not counted as either at- or off-list.
+All four are computed by `prepare_data.py` and written side by side under
+those exact keys. Neither the median nor any per-customer cut is asserted to
+be "the" right answer here — that's a framing choice, not a data fact.
 
-## 4. Run the harness phases
+Why the last two exist: a (SKU, customer) pair bought only once is
+**trivially** at-reference under `per_customer_reference` — with a single
+sample, the mode of that sample is itself, so it can never register as
+off-list. 42.9% of the 801,418 customer-attributed lines are exactly such
+singletons. Excluding them (`_excl_single_purchase`) raises the rate from
+3.4% to 6.0%; restricting further to pairs with an actually well-sampled
+buying pattern (6+ purchases, `_min6_purchases`) raises it again to 8.9%.
+`off_reference` (27,340) is identical between `per_customer_reference` and
+`per_customer_reference_excl_single_purchase` — confirming, exactly as the
+math predicts, that singleton pairs contribute zero off-list lines and the
+whole rate difference is a denominator effect, not new deviating lines.
+
+The per-customer cuts are computed only over the 801,418 (of 1,033,527)
+lines that carry a Customer ID; 232,109 anonymous lines are excluded from
+all three per-customer numbers, not counted as either at- or off-list.
+
+**Reading across the table**: the pooled-median 31.4% is dominated by the
+wholesale/retail split the README calls out. As soon as you ask "does this
+specific customer usually pay this" instead of "does this differ from the
+market-wide median", off-list drops by roughly 3-10x. Off-list is not rare
+even under the strictest per-customer cut (8.9%, established repeat buyers
+only) — but it is far rarer than the headline number suggests once you
+control for the fact that a wholesaler selling at two legitimate price
+points isn't "off list" by any definition a customer would recognize.
+
+## 4. Enable server scripts (required for the enforcement boundary)
+
+`harness/enforce.py` installs a server-side `bill_intent` API method as a
+Frappe **Server Script**, which ERPNext refuses to run unless the site
+config explicitly allows it. Set it once per site:
+
+```bash
+docker exec <backend-container> bench --site frontend set-config server_script_enabled true
+```
+
+(container name depends on your compose project; with `-p headless-erp`
+it's `headless-erp-backend-1`). This writes `server_script_enabled: true`
+into `sites/frontend/site_config.json` (or `sites/common_site_config.json`
+if applied to all sites). Verified present on this instance:
+
+```bash
+$ docker exec headless-erp-backend-1 cat /home/frappe/frappe-bench/sites/common_site_config.json
+{
+ ...
+ "server_script_enabled": true
+}
+```
+
+`harness/prove_boundary.py` calls `harness/enforce.py`'s `ensure()` itself
+before running its checks, so `make boundary` provisions the role, the
+constrained user, and the `bill_intent` Server Script on every run
+(idempotent — it updates in place if they already exist). It does **not**
+set `server_script_enabled` for you; if it's `false`, ERPNext will silently
+refuse to invoke the script and `make boundary` will fail at step 3 with a
+permission or "method not whitelisted" error.
+
+## 5. Run the harness phases
 
 ```bash
 make diff          # Phase 1 - the original differential (reports/latest.json)
 make census        # Phase 2 - silent-acceptance census (reports/census.json)
 make contract       # Phase 4 - the intent contract, 7 cases (reports/intent_proof.json)
 make corpus         # Phase 5 - the 39-scenario corpus (reports/corpus.json)
+make boundary        # the enforcement boundary, 8 checks (reports/boundary.json)
 make simulate        # Phase 6 - replay 1,000 real invoices (reports/simulation.json)
 ```
 
@@ -122,7 +175,35 @@ Measured runtimes against a local stack on this machine (2026-09-08):
 | `make contract` | ~5s | 7 cases. **Hit a transient `QueryDeadlockError` on `tabSeries` on the first attempt** — a MariaDB naming-series race, not a code bug; retried immediately and passed 7/7. If this happens, just re-run. |
 | `make corpus` | ~10s | 39 scenarios |
 | `make data` | ~55s | see above |
-| `make simulate` | ~6 min | 1,000 invoices written twice (naive + intent); the committed `reports/simulation.json` is this exact run (378s, measured 2026-09-07) |
+| `make boundary` | ~5s | provisions the role/user/Server Script, then runs 8 checks; verified 8/8 (2026-09-08) |
+| `make simulate` | ~6 min | 1,000 invoices written twice (naive + intent); the committed `reports/simulation.json` is this exact run (378s, measured 2026-09-07). A 250-invoice smoke test (~78s) was also run during this pass to verify the target mechanically works, then the original 1,000-invoice `reports/simulation.json` was restored so the committed figures weren't disturbed. |
+
+### The enforcement boundary, in one run
+
+`make boundary` (`harness/prove_boundary.py`) is the strongest evidence in
+the repo, because it doesn't trust any client-side code at all:
+
+```
+1. direct write, unconstrained identity   -> ALLOWED   (Administrator can still do anything)
+2. direct write, constrained identity     -> 403        (the "Agent Writer" role has no write perm on any transaction doctype)
+3. constrained identity, via bill_intent:
+     clean call, no caller input           -> derives list price, writes
+     caller supplies rate                  -> REFUSED
+     caller supplies price_list_rate       -> REFUSED
+     override with no reason               -> REFUSED
+     override with a reason                -> allowed, recorded
+     item with no resolvable price         -> REFUSED
+
+8/8 boundary checks passed
+```
+
+Case 2 is the point of this section: it is not merely that the intent layer
+*chooses* to derive-or-refuse (that's `prove_intent.py`, a client library
+that a caller could simply not use) — a constrained identity has **no other
+way in**. `/api/resource/Sales Invoice` returns 403 before any business
+logic runs. The only path to a Sales Invoice for that identity is
+`bill_intent`, and that endpoint enforces the same derive-or-refuse contract
+server-side.
 
 ### A real finding from re-running `make corpus` on this shared instance
 
@@ -157,7 +238,7 @@ modified for this pass), and the stray rule was left in place rather than
 deleted mid-review — flag it and let whoever owns the instance decide
 whether to reset it.
 
-## 5. What's still not reproducible from a committed script
+## 6. What's still not reproducible from a committed script
 
 Stated plainly so nothing here is claimed as more solid than it is:
 
@@ -174,7 +255,7 @@ Stated plainly so nothing here is claimed as more solid than it is:
   its own default of 250 invoices, which is faster (~80s) but will not
   reproduce those exact figures.
 
-## 6. Tearing down
+## 7. Tearing down
 
 ```bash
 make down          # docker compose -f docker/pwd.yml -p headless-erp down

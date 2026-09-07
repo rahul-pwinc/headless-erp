@@ -12,8 +12,24 @@ and the only way to audit a quarter is to regex several thousand free-text
 fields. This module replaces it with a real one.
 
 Design in one line: a standalone, submittable, hash-chained DocType created
-through the REST API, one row per overridden field, linked to the voucher by a
-validated Dynamic Link.
+through the REST API, one row per overridden field, holding three values —
+derived, requested and stored.
+
+Three values, because two is a lie
+----------------------------------
+The obvious schema records what the server derived and what the caller asked
+for. That is an account of what the intent layer *decided*, and ERPNext is
+under no obligation to agree with it. Observed on this instance: a Pricing Rule
+runs during validate — after the intent layer has already set the rate — and
+rewrote a line from 250 to 225, silently discarding an explicit, reasoned
+override of 1.0. A record built from intent asserted "derived 250, charged 1.0,
+reason: goodwill" about a document that actually stored 225. Every field in
+that record was written in good faith and the record as a whole was false.
+
+So the writer reads the persisted document back and records a third value,
+`stored`, plus a `drift` verdict comparing it to `requested`. An audit record
+must be written from the saved document, never from what the caller intended;
+the caller's intention is evidence about the caller, not about the books.
 
 Why standalone rather than a child table on the voucher
 -------------------------------------------------------
@@ -188,6 +204,13 @@ def _field_spec() -> list[dict]:
         {"fieldname": "is_numeric", "fieldtype": "Check", "label": "Is Numeric"},
         {"fieldname": "derived_num", "fieldtype": "Float", "label": "Derived (numeric)", "precision": "6"},
         {"fieldname": "requested_num", "fieldtype": "Float", "label": "Requested (numeric)", "precision": "6"},
+        # Caveat that shapes every aggregate below: Frappe stores a Float with
+        # no value as 0.0, not NULL, so an `unverified` record is numerically
+        # indistinguishable from one whose stored value really was zero. The
+        # text column `stored_value` stays NULL and `drift` says "unverified",
+        # so the truth is recorded — but any SUM over stored_num or value_delta
+        # must be split by `drift` first. overrides_by_field and
+        # overrides_by_actor both do that.
         {"fieldname": "stored_num", "fieldtype": "Float", "label": "Stored (numeric)", "precision": "6"},
         # stored - derived. The delta that actually reached the books, which is
         # the one an auditor is adding up. Signed on purpose: Phase 6 found
@@ -848,10 +871,16 @@ def overrides_by_actor(client: FrappeClient, from_date: str | None = None,
     filters: dict[str, Any] = {}
     if from_date and to_date:
         filters[_BASIS[basis]] = ["between", [from_date, to_date]]
+    # Grouped by drift as well as actor, and not for tidiness: a Float column
+    # holding NULL reads back as 0.0 (see the stored_num note in _field_spec),
+    # so an `unverified` record folded into the same bucket would contribute a
+    # silent zero to net_delta and read as "this override moved nothing".
     rows = client.call(
         "frappe.client.get_list", doctype=DOCTYPE, filters=filters,
-        fields=["actor", "actor_kind", {"COUNT": "name"}, {"SUM": "value_delta"}],
-        group_by="actor, actor_kind", order_by="actor asc", limit_page_length=0) or []
+        fields=["actor", "actor_kind", "drift", {"COUNT": "name"},
+                {"SUM": "value_delta"}],
+        group_by="actor, actor_kind, drift", order_by="actor asc",
+        limit_page_length=0) or []
     return [_normalise_agg(r) for r in rows]
 
 
@@ -990,22 +1019,36 @@ def verify_chain(client: FrappeClient) -> dict:
 
 # --------------------------------------------------------------------------
 
+DRIFT_MARK = {"none": "", "changed": "  <-- DRIFT", "unverified": "  <-- UNVERIFIED"}
+
+
 def format_rows(rows: Iterable[dict]) -> str:
-    """Fixed-width rendering for the demo and for CLI use."""
+    """Fixed-width rendering for the demo and for CLI use.
+
+    All three values are shown side by side. A two-column rendering was what
+    made the original defect easy to miss: DERIVED -> REQUESTED reads as a
+    complete account of the transaction right up until STORED disagrees.
+    """
     rows = list(rows)
     if not rows:
         return "  (none)"
-    hdr = f"  {'DATE':<11}{'TARGET':<28}{'ROW':>4}  {'FIELD':<10}{'DERIVED':>10}{'->':^4}{'SUPPLIED':>10}{'DELTA':>10}  {'STATE':<10}{'ACTOR':<26}REASON"
+    hdr = (f"  {'DATE':<11}{'TARGET':<28}{'ROW':>4}  {'FIELD':<10}"
+           f"{'DERIVED':>10}{'REQUESTED':>12}{'STORED':>10}{'EFF.DELTA':>11}  "
+           f"{'DRIFT':<11}{'STATE':<10}{'ACTOR':<26}REASON")
     lines = [hdr, "  " + "-" * (len(hdr) - 2)]
     for r in rows:
         tgt = f"{r['target_doctype'][:2].upper()} {r['target_name']}"
         lines.append(
             f"  {str(r.get('target_posting_date') or '')[:10]:<11}"
             f"{tgt[:27]:<28}{r.get('row_idx', 0):>4}  {r['fieldname'][:9]:<10}"
-            f"{_fmt(r.get('derived_num'), r.get('derived_value')):>10}{'->':^4}"
-            f"{_fmt(r.get('supplied_num'), r.get('supplied_value')):>10}"
-            f"{_fmt(r.get('value_delta'), ''):>10}  "
+            f"{_fmt(r.get('derived_num'), r.get('derived_value')):>10}"
+            f"{_fmt(r.get('requested_num'), r.get('requested_value')):>12}"
+            f"{_fmt(r.get('stored_num'), r.get('stored_value')):>10}"
+            f"{_fmt(r.get('value_delta'), ''):>11}  "
+            f"{(r.get('drift') or '?'):<11}"
             f"{(r.get('target_state') or '?'):<10}{r['actor'][:25]:<26}{r['reason']}")
+        if r.get("drift") in ("changed", "unverified"):
+            lines.append(f"  {'':<11}  !! {r.get('drift_note') or r['drift']}")
         if r.get("lifecycle_note"):
             lines.append(f"  {'':<11}  ↳ {r['lifecycle_note']}")
     return "\n".join(lines)

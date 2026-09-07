@@ -1,4 +1,4 @@
-.PHONY: setup up data diff census contract corpus simulate all down
+.PHONY: trial-balance setup up data diff census contract boundary corpus simulate all down
 
 PYTHON := ./.venv/bin/python
 PIP    := ./.venv/bin/pip
@@ -77,3 +77,7 @@ simulate: data
 all: setup up data diff census contract corpus boundary simulate
 	@echo "==> all: full pipeline complete. See docs/REPRODUCE.md for what each report proves."
 
+
+trial-balance:  ## Produce reports/trial_balance.json (reproducibility only; see the script header)
+	@echo "==> trial balance (guaranteed balanced by construction)"
+	./.venv/bin/python harness/trial_balance.py

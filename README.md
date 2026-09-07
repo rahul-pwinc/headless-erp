@@ -153,12 +153,59 @@ PASS  7. return with a rate override  ->  REFUSED (intent-level refuse beats the
 
 Case 5 is the point. The same 4.00 invoice ERPNext accepted in silence is still reachable, because sometimes a business genuinely does discount 99.6%. What changed is that it now carries what the price should have been, that someone overrode it, and why. Case 7 shows an intent can be stricter than the default: a return reprices history, so it gets no override path at all.
 
+## Phase 5 — the use-case corpus
+
+`corpus/scenarios.yaml` holds 39 scenarios across 7 categories. Each states an accounting **principle** and asserts against it. The oracle is double-entry bookkeeping, not ERPNext's behaviour and not the Desk UI.
+
+```
+  collection             7/7     partial payments, overallocation, settlement to zero
+  commitments            5/5     quotes and orders post nothing
+  derivation_contract   10/10    refuse / override / derive
+  guards                 4/4     drafts, unknown intents, docstatus
+  order_to_cash          6/6     revenue recognition, receivables, multi-line
+  procure_to_pay         5/5     payables, supplier payment, part payment
+  returns                2/2     a return may not reprice history
+
+  TOTAL                 39/39
+```
+
+Scenarios read as accounting, not as API calls:
+
+```yaml
+- id: col-02-partial-payment-leaves-remainder
+  principle: A part payment reduces the receivable by exactly what was paid, no more.
+  when:
+    - {intent: bill,    as: inv, lines: [{item: item_code, qty: 4}]}
+    - {intent: collect, allocate: [{doc: $inv, amount: 400}]}
+  then:
+    - {assert: outstanding, doc: $inv, value: 600}
+    - {assert: balanced}
+```
+
+One scenario failed on the first run: `der-08-unpriced-item-refused` expected the engine to refuse an item with no resolvable price, and it did not. The cause was the scenario, not the engine — the fixture item had a price in the buying list, so a price *was* resolvable. Fixed by adding an item with no price in any list, which is what the principle actually requires. That is the corpus doing its job: it caught a lie in its own setup.
+
+## Why this is not just a test suite
+
+The corpus is the oracle the invariant approach cannot be. Consider what each layer catches:
+
+| approach | catches a 4.00 invoice that should be 1000.00? |
+|---|---|
+| accounting invariants (debits == credits) | **no** — it balances perfectly |
+| ERPNext's own 4,153 tests | **no** — the document is valid |
+| diffing against the Desk UI | only if you accept the UI as truth |
+| **a principle: "the total is the agreed price times quantity"** | **yes** |
+
+That last row is the whole project. Correctness in an ERP is defined by the business and by accounting, not by what a particular implementation happens to do.
+
 ## Run it
 
 ```bash
 python3 -m venv .venv && ./.venv/bin/pip install requests
 docker compose -f docker/pwd.yml -p headless-erp up -d      # ~5 min first run
-./.venv/bin/python harness/run.py
+./.venv/bin/python harness/run.py          # the original differential
+./.venv/bin/python harness/run_census.py   # Phase 2: silent-acceptance census
+./.venv/bin/python harness/prove_intent.py # Phase 4: the contract, 7 cases
+./.venv/bin/python harness/run_corpus.py   # Phase 5: the corpus, 39 scenarios
 ```
 
 Defaults to `http://localhost:8080`, `Administrator` / `admin`. Report lands in `reports/latest.json`.
@@ -170,6 +217,11 @@ harness/client.py     Frappe REST client (session auth, same path a browser uses
 harness/oracle.py     ctx reconstruction, both paths, the diff, GL balance check
 harness/fixtures.py   idempotent master data (setup wizard, item, price, customer)
 harness/run.py        CLI entry point
+harness/census.py     Phase 2 - silent-acceptance probe
+harness/intent.py     Phase 4 - the intent executor (refuse / override / derive)
+harness/corpus.py     Phase 5 - scenario engine, asserts on accounting principles
+intents/catalog.yaml  11 business intents, 27 invariants
+corpus/scenarios.yaml 39 accounting-determined scenarios
 docker/pwd.yml        ERPNext v16.34.1 stack
 ```
 

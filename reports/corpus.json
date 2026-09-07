@@ -1,0 +1,481 @@
+{
+  "generated_at": "2026-09-07T16:32:07.689036+00:00",
+  "erpnext_version": "v16.34.1",
+  "passed": 39,
+  "total": 39,
+  "by_category": {
+    "order_to_cash": {
+      "passed": 6,
+      "total": 6
+    },
+    "commitments": {
+      "passed": 5,
+      "total": 5
+    },
+    "collection": {
+      "passed": 7,
+      "total": 7
+    },
+    "procure_to_pay": {
+      "passed": 5,
+      "total": 5
+    },
+    "derivation_contract": {
+      "passed": 10,
+      "total": 10
+    },
+    "returns": {
+      "passed": 2,
+      "total": 2
+    },
+    "guards": {
+      "passed": 4,
+      "total": 4
+    }
+  },
+  "results": [
+    {
+      "id": "otc-01-invoice-creates-receivable",
+      "category": "order_to_cash",
+      "principle": "Issuing an invoice recognises revenue and creates a receivable of equal value.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00056"
+      ],
+      "notes": []
+    },
+    {
+      "id": "otc-02-invoice-balances",
+      "category": "order_to_cash",
+      "principle": "Every posting is balanced. Debits equal credits, without exception.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00057"
+      ],
+      "notes": []
+    },
+    {
+      "id": "otc-03-total-is-price-times-qty",
+      "category": "order_to_cash",
+      "principle": "With no discount, the invoice total is the agreed unit price times quantity.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00058"
+      ],
+      "notes": []
+    },
+    {
+      "id": "otc-04-outstanding-starts-at-total",
+      "category": "order_to_cash",
+      "principle": "Before any collection, the whole invoice is outstanding.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00059"
+      ],
+      "notes": []
+    },
+    {
+      "id": "otc-05-status-unpaid",
+      "category": "order_to_cash",
+      "principle": "An unpaid submitted invoice is Unpaid, and Unpaid is a real state, not a default.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00060"
+      ],
+      "notes": []
+    },
+    {
+      "id": "otc-06-multi-line-sums",
+      "category": "order_to_cash",
+      "principle": "The document total is the sum of its lines. No line is silently dropped.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00061"
+      ],
+      "notes": []
+    },
+    {
+      "id": "com-01-quotation-posts-nothing",
+      "category": "commitments",
+      "principle": "An offer is not a transaction. A quotation moves no money and no goods.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Quotation/SAL-QTN-2026-00026"
+      ],
+      "notes": []
+    },
+    {
+      "id": "com-02-sales-order-posts-nothing",
+      "category": "commitments",
+      "principle": "An accepted order is a promise, not a posting. Revenue is not recognised on order.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Order/SAL-ORD-2026-00023"
+      ],
+      "notes": []
+    },
+    {
+      "id": "com-03-purchase-order-posts-nothing",
+      "category": "commitments",
+      "principle": "Ordering goods incurs no liability until they are received or billed.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Purchase Order/PUR-ORD-2026-00022"
+      ],
+      "notes": []
+    },
+    {
+      "id": "com-04-material-request-posts-nothing",
+      "category": "commitments",
+      "principle": "An internal request is not a commitment to any third party.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Material Request/MAT-MR-2026-00023"
+      ],
+      "notes": []
+    },
+    {
+      "id": "com-05-quotation-total-matches-price",
+      "category": "commitments",
+      "principle": "An offer must state the same price the sale would use, or it is not an offer.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Quotation/SAL-QTN-2026-00027"
+      ],
+      "notes": []
+    },
+    {
+      "id": "col-01-full-payment-clears",
+      "category": "collection",
+      "principle": "Paying an invoice in full leaves nothing outstanding.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00062",
+        "Payment Entry/ACC-PAY-2026-00009"
+      ],
+      "notes": []
+    },
+    {
+      "id": "col-02-partial-payment-leaves-remainder",
+      "category": "collection",
+      "principle": "A part payment reduces the receivable by exactly what was paid, no more.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00063",
+        "Payment Entry/ACC-PAY-2026-00010"
+      ],
+      "notes": []
+    },
+    {
+      "id": "col-03-partial-payment-status",
+      "category": "collection",
+      "principle": "An invoice paid in part is Partly Paid. It is neither open nor settled.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00064",
+        "Payment Entry/ACC-PAY-2026-00011"
+      ],
+      "notes": []
+    },
+    {
+      "id": "col-04-payment-posts-bank-and-debtors",
+      "category": "collection",
+      "principle": "Collecting cash converts a receivable into cash. It does not create revenue.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00065",
+        "Payment Entry/ACC-PAY-2026-00012"
+      ],
+      "notes": []
+    },
+    {
+      "id": "col-05-overallocation-refused",
+      "category": "collection",
+      "principle": "You cannot collect more against an invoice than it is worth.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00066"
+      ],
+      "notes": [
+        "refused: collect: allocating 5000.0 to ACC-SINV-2026-00066 exceeds its outstanding of 1000.0."
+      ]
+    },
+    {
+      "id": "col-06-outstanding-is-derived-not-supplied",
+      "category": "collection",
+      "principle": "Outstanding is a fact about the ledger. A payer does not get to assert it.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00067"
+      ],
+      "notes": [
+        "refused: collect: outstanding is derived from ACC-SINV-2026-00067, not supplied."
+      ]
+    },
+    {
+      "id": "col-07-two-partials-settle",
+      "category": "collection",
+      "principle": "Successive part payments settle an invoice exactly. Rounding never creates or destroys money.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00068",
+        "Payment Entry/ACC-PAY-2026-00013",
+        "Payment Entry/ACC-PAY-2026-00014"
+      ],
+      "notes": []
+    },
+    {
+      "id": "p2p-01-bill-creates-payable",
+      "category": "procure_to_pay",
+      "principle": "A supplier bill creates a payable equal to the billed amount.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Purchase Invoice/ACC-PINV-2026-00026"
+      ],
+      "notes": []
+    },
+    {
+      "id": "p2p-02-bill-total-uses-buying-price",
+      "category": "procure_to_pay",
+      "principle": "A purchase is valued at the purchase price, never the selling price.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Purchase Invoice/ACC-PINV-2026-00027"
+      ],
+      "notes": []
+    },
+    {
+      "id": "p2p-03-payment-clears-payable",
+      "category": "procure_to_pay",
+      "principle": "Paying a supplier discharges the liability and reduces cash.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Purchase Invoice/ACC-PINV-2026-00028",
+        "Payment Entry/ACC-PAY-2026-00015"
+      ],
+      "notes": []
+    },
+    {
+      "id": "p2p-04-partial-supplier-payment",
+      "category": "procure_to_pay",
+      "principle": "Part-paying a bill leaves the rest owed.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Purchase Invoice/ACC-PINV-2026-00029",
+        "Payment Entry/ACC-PAY-2026-00016"
+      ],
+      "notes": []
+    },
+    {
+      "id": "p2p-05-overpay-supplier-refused",
+      "category": "procure_to_pay",
+      "principle": "You cannot discharge more liability than exists.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Purchase Invoice/ACC-PINV-2026-00030"
+      ],
+      "notes": [
+        "refused: pay: allocating 9999.0 to ACC-PINV-2026-00030 exceeds its outstanding of 480.0."
+      ]
+    },
+    {
+      "id": "der-01-price-list-rate-refused-sell",
+      "category": "derivation_contract",
+      "principle": "A caller may not assert the reference price. No Desk session can.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: line 0 may not supply 'price_list_rate'."
+      ]
+    },
+    {
+      "id": "der-02-price-list-rate-refused-buy",
+      "category": "derivation_contract",
+      "principle": "The same rule binds the buying side. Contracts are symmetric.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: expense: line 0 may not supply 'price_list_rate'."
+      ]
+    },
+    {
+      "id": "der-03-rate-needs-a-reason",
+      "category": "derivation_contract",
+      "principle": "Selling off-list is a decision. Decisions are recorded, not inferred.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: override of 'rate' requires a reason."
+      ]
+    },
+    {
+      "id": "der-04-rate-override-with-reason-allowed",
+      "category": "derivation_contract",
+      "principle": "A business may genuinely discount. The record must show it did so deliberately.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00069"
+      ],
+      "notes": []
+    },
+    {
+      "id": "der-05-derived-field-not-overridable",
+      "category": "derivation_contract",
+      "principle": "Computed values are not opinions. They cannot be overridden at all.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: 'net_amount' is derived and not overridable. Overridable here: ['rate']"
+      ]
+    },
+    {
+      "id": "der-06-discount-amount-refused",
+      "category": "derivation_contract",
+      "principle": "Discount is the gap between list and agreed price. Asserting it lets the two disagree.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: line 0 may not supply 'discount_amount'."
+      ]
+    },
+    {
+      "id": "der-07-weight-refused",
+      "category": "derivation_contract",
+      "principle": "Item master properties are not transaction values.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: line 0 may not supply 'weight_per_unit'."
+      ]
+    },
+    {
+      "id": "der-08-unpriced-item-refused",
+      "category": "derivation_contract",
+      "principle": "If no price can be found, refuse. Guessing a price is worse than failing.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: line 0: no price is resolvable for 'HL-UNPRICED-001' in 'Standard Selling'. Refusing to guess a rate."
+      ]
+    },
+    {
+      "id": "der-10-unpriced-item-refused-on-buy",
+      "category": "derivation_contract",
+      "principle": "The refusal to guess binds both sides of the ledger.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: expense: line 0: no price is resolvable for 'HL-UNPRICED-001' in 'Standard Buying'. Refusing to guess a rate."
+      ]
+    },
+    {
+      "id": "der-09-override-keeps-document-consistent",
+      "category": "derivation_contract",
+      "principle": "An override must leave the document internally consistent, not merely accepted.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00070"
+      ],
+      "notes": []
+    },
+    {
+      "id": "ret-01-return-cannot-reprice",
+      "category": "returns",
+      "principle": "A return reverses an agreed transaction. It may not reprice history.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: return: 'rate' is refused and cannot be overridden."
+      ]
+    },
+    {
+      "id": "ret-02-return-also-refuses-price-list-rate",
+      "category": "returns",
+      "principle": "Every refusal that binds a sale binds its reversal.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: return: line 0 may not supply 'price_list_rate'."
+      ]
+    },
+    {
+      "id": "grd-01-unknown-intent-refused",
+      "category": "guards",
+      "principle": "An unknown operation is refused, never approximated.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: unknown intent 'teleport'"
+      ]
+    },
+    {
+      "id": "grd-02-quotation-has-no-outstanding",
+      "category": "guards",
+      "principle": "A document that posts nothing owes nothing.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Quotation/SAL-QTN-2026-00028"
+      ],
+      "notes": []
+    },
+    {
+      "id": "grd-03-submitted-invoice-is-docstatus-1",
+      "category": "guards",
+      "principle": "Submission is a real state change. A posted invoice is not a draft.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00071"
+      ],
+      "notes": []
+    },
+    {
+      "id": "grd-04-draft-posts-nothing",
+      "category": "guards",
+      "principle": "A draft has no effect on the ledger. Nothing is real until submitted.",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-00072"
+      ],
+      "notes": []
+    }
+  ]
+}

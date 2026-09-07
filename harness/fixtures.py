@@ -16,6 +16,7 @@ ITEM_GROUP = "Products"
 LIST_PRICE = 250.0          # the Price List rate the UI would derive
 CUSTOMER = "Headless Test Customer"
 SUPPLIER = "Headless Test Supplier"
+UNPRICED_ITEM = "HL-UNPRICED-001"  # deliberately has no Item Price anywhere
 BUY_PRICE_LIST = "Standard Buying"
 BUY_PRICE = 120.0
 
@@ -54,6 +55,7 @@ def ensure_item(client: FrappeClient) -> None:
             {
                 "doctype": "Item",
                 "item_code": ITEM_CODE,
+        "unpriced_item": UNPRICED_ITEM,
                 "item_name": "Headless Widget",
                 "item_group": ITEM_GROUP,
                 "stock_uom": "Nos",
@@ -77,11 +79,25 @@ def ensure_item(client: FrappeClient) -> None:
             {
                 "doctype": "Item Price",
                 "item_code": ITEM_CODE,
+        "unpriced_item": UNPRICED_ITEM,
                 "price_list": PRICE_LIST,
                 "price_list_rate": LIST_PRICE,
             }
         )
         print(f"  price:  {PRICE_LIST} = {LIST_PRICE} (created)")
+
+
+def ensure_unpriced_item(client: FrappeClient) -> None:
+    """An item with no price in any list. Used to prove the engine refuses to
+    guess a rate rather than inventing one."""
+    if client.exists("Item", UNPRICED_ITEM):
+        print(f"  item: {UNPRICED_ITEM} exists (no price, by design)")
+        return
+    client.insert({"doctype": "Item", "item_code": UNPRICED_ITEM,
+                   "item_name": "Headless Unpriced Widget", "item_group": ITEM_GROUP,
+                   "stock_uom": "Nos", "is_stock_item": 0,
+                   "description": "Deliberately has no Item Price."})
+    print(f"  item: created {UNPRICED_ITEM} (no price, by design)")
 
 
 def ensure_customer(client: FrappeClient) -> None:
@@ -120,6 +136,7 @@ def ensure_all(client: FrappeClient) -> dict:
     ensure_item(client)
     ensure_customer(client)
     ensure_supplier(client)
+    ensure_unpriced_item(client)
     company = (
         client.call("frappe.client.get_list", doctype="Company", fields=["name"], limit_page_length=0)
         or [{"name": COMPANY}]
@@ -127,6 +144,7 @@ def ensure_all(client: FrappeClient) -> dict:
     return {
         "company": company,
         "item_code": ITEM_CODE,
+        "unpriced_item": UNPRICED_ITEM,
         "customer": CUSTOMER,
         "price_list": PRICE_LIST,
         "list_price": LIST_PRICE,

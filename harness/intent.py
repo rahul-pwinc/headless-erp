@@ -81,6 +81,84 @@ class IntentEngine:
 
     # ---- execution -----------------------------------------------------------
 
+    # ---- payment intents (no item rows) --------------------------------------
+
+    ITEMLESS = {"collect", "pay"}
+
+    def execute_payment(
+        self, intent_id: str, header: dict, allocations: list[dict] | None = None,
+        submit: bool = True,
+    ) -> IntentResult:
+        """Payment Entry has no item table, so the derive/refuse contract applies
+        to allocation instead: outstanding comes from the referenced documents,
+        never from the caller, and the total allocated may not exceed what is paid.
+        """
+        spec = self.intents[intent_id]
+        doctype = spec["maps_to"]["doctype"]
+        res = IntentResult(intent=intent_id, doctype=doctype)
+        is_receive = intent_id == "collect"
+
+        refs, allocated = [], 0.0
+        for a in (allocations or []):
+            ref_dt, ref_name = a["doc"]
+            live = self.client.get_doc(ref_dt, ref_name)
+            outstanding = float(live.get("outstanding_amount") or 0)
+            if "outstanding" in a:
+                raise IntentRefused(
+                    f"{intent_id}: outstanding is derived from {ref_name}, not supplied."
+                )
+            amt = float(a.get("amount", outstanding))
+            if amt - outstanding > 1e-6:
+                raise IntentRefused(
+                    f"{intent_id}: allocating {amt} to {ref_name} exceeds its "
+                    f"outstanding of {outstanding}."
+                )
+            allocated += amt
+            refs.append({"reference_doctype": ref_dt, "reference_name": ref_name,
+                         "total_amount": float(live.get("grand_total") or 0),
+                         "outstanding_amount": outstanding, "allocated_amount": amt})
+            res.derived[ref_name] = {"outstanding": outstanding}
+
+        paid = float(header.get("paid_amount") or allocated)
+        if allocated - paid > 1e-6:
+            raise IntentRefused(
+                f"{intent_id}: allocated {allocated} exceeds paid_amount {paid}."
+            )
+
+        party_acct_type = "Receivable" if is_receive else "Payable"
+        party_type = "Customer" if is_receive else "Supplier"
+        bank = self._default_bank(header["company"])
+        doc = {
+            "doctype": doctype,
+            "payment_type": "Receive" if is_receive else "Pay",
+            "company": header["company"],
+            "posting_date": header.get("posting_date"),
+            "party_type": party_type,
+            "party": header["party"],
+            "paid_amount": paid,
+            "received_amount": paid,
+            "source_exchange_rate": 1,
+            "target_exchange_rate": 1,
+            "references": refs,
+        }
+        doc["paid_to" if is_receive else "paid_from"] = bank
+        saved = self.client.insert(doc)
+        if submit:
+            saved = self.client.submit(saved)
+        res.name, res.docstatus = saved.get("name"), saved.get("docstatus")
+        res.grand_total = saved.get("paid_amount")
+        self._check_invariants(spec, saved, res)
+        return res
+
+    def _default_bank(self, company: str) -> str:
+        rows = self.client.call(
+            "frappe.client.get_list", doctype="Account",
+            filters={"company": company, "account_type": ["in", ["Bank", "Cash"]],
+                     "is_group": 0}, fields=["name"], limit_page_length=0) or []
+        if not rows:
+            raise IntentRefused(f"no Bank or Cash account on {company}")
+        return rows[0]["name"]
+
     def execute(
         self,
         intent_id: str,

@@ -1,0 +1,316 @@
+# Phase 5 — use-case corpus.
+#
+# Every scenario asserts against an accounting principle, never against
+# "what ERPNext did". A failure means the intent layer or ERPNext diverges
+# from what an accountant would expect. Both are findings.
+#
+# Fixtures: item HL-WIDGET-001, selling list 250.00, buying list 120.00,
+# one customer, one supplier, INR, company "Headless Test Co".
+
+scenarios:
+
+# ── revenue recognition ──────────────────────────────────────────────────────
+- id: otc-01-invoice-creates-receivable
+  category: order_to_cash
+  principle: Issuing an invoice recognises revenue and creates a receivable of equal value.
+  when: [{intent: bill, lines: [{item: item_code, qty: 4}]}]
+  then:
+    - {assert: gl, account: Debtors, side: debit, amount: 1000}
+    - {assert: gl, account: Sales, side: credit, amount: 1000}
+    - {assert: balanced}
+
+- id: otc-02-invoice-balances
+  category: order_to_cash
+  principle: Every posting is balanced. Debits equal credits, without exception.
+  when: [{intent: bill, lines: [{item: item_code, qty: 7}]}]
+  then: [{assert: balanced}]
+
+- id: otc-03-total-is-price-times-qty
+  category: order_to_cash
+  principle: With no discount, the invoice total is the agreed unit price times quantity.
+  when: [{intent: bill, lines: [{item: item_code, qty: 4}]}]
+  then: [{assert: grand_total, value: 1000}]
+
+- id: otc-04-outstanding-starts-at-total
+  category: order_to_cash
+  principle: Before any collection, the whole invoice is outstanding.
+  when: [{intent: bill, lines: [{item: item_code, qty: 4}]}]
+  then: [{assert: outstanding, value: 1000}]
+
+- id: otc-05-status-unpaid
+  category: order_to_cash
+  principle: An unpaid submitted invoice is Unpaid, and Unpaid is a real state, not a default.
+  when: [{intent: bill, lines: [{item: item_code, qty: 4}]}]
+  then: [{assert: status, value: Unpaid}]
+
+- id: otc-06-multi-line-sums
+  category: order_to_cash
+  principle: The document total is the sum of its lines. No line is silently dropped.
+  when: [{intent: bill, lines: [{item: item_code, qty: 2}, {item: item_code, qty: 3}]}]
+  then:
+    - {assert: grand_total, value: 1250}
+    - {assert: balanced}
+
+# ── commitments post nothing ─────────────────────────────────────────────────
+- id: com-01-quotation-posts-nothing
+  category: commitments
+  principle: An offer is not a transaction. A quotation moves no money and no goods.
+  when: [{intent: quote, lines: [{item: item_code, qty: 4}]}]
+  then: [{assert: no_gl}]
+
+- id: com-02-sales-order-posts-nothing
+  category: commitments
+  principle: An accepted order is a promise, not a posting. Revenue is not recognised on order.
+  when: [{intent: sell, lines: [{item: item_code, qty: 4}]}]
+  then: [{assert: no_gl}]
+
+- id: com-03-purchase-order-posts-nothing
+  category: commitments
+  principle: Ordering goods incurs no liability until they are received or billed.
+  when: [{intent: procure, lines: [{item: item_code, qty: 4}]}]
+  then: [{assert: no_gl}]
+
+- id: com-04-material-request-posts-nothing
+  category: commitments
+  principle: An internal request is not a commitment to any third party.
+  when: [{intent: source, lines: [{item: item_code, qty: 4}]}]
+  then: [{assert: no_gl}]
+
+- id: com-05-quotation-total-matches-price
+  category: commitments
+  principle: An offer must state the same price the sale would use, or it is not an offer.
+  when: [{intent: quote, lines: [{item: item_code, qty: 4}]}]
+  then: [{assert: grand_total, value: 1000}]
+
+# ── collection ───────────────────────────────────────────────────────────────
+- id: col-01-full-payment-clears
+  category: collection
+  principle: Paying an invoice in full leaves nothing outstanding.
+  when:
+    - {intent: bill, as: inv, lines: [{item: item_code, qty: 4}]}
+    - {intent: collect, allocate: [{doc: $inv, amount: 1000}]}
+  then:
+    - {assert: balanced}
+    - {assert: outstanding, doc: $inv, value: 0}
+
+- id: col-02-partial-payment-leaves-remainder
+  category: collection
+  principle: A part payment reduces the receivable by exactly what was paid, no more.
+  when:
+    - {intent: bill, as: inv, lines: [{item: item_code, qty: 4}]}
+    - {intent: collect, allocate: [{doc: $inv, amount: 400}]}
+  then:
+    - {assert: outstanding, doc: $inv, value: 600}
+    - {assert: balanced}
+
+- id: col-03-partial-payment-status
+  category: collection
+  principle: An invoice paid in part is Partly Paid. It is neither open nor settled.
+  when:
+    - {intent: bill, as: inv, lines: [{item: item_code, qty: 4}]}
+    - {intent: collect, allocate: [{doc: $inv, amount: 250}]}
+  then: [{assert: status, doc: $inv, value: Partly Paid}]
+
+- id: col-04-payment-posts-bank-and-debtors
+  category: collection
+  principle: Collecting cash converts a receivable into cash. It does not create revenue.
+  when:
+    - {intent: bill, as: inv, lines: [{item: item_code, qty: 4}]}
+    - {intent: collect, as: pay, allocate: [{doc: $inv, amount: 1000}]}
+  then:
+    - {assert: gl, doc: $pay, account: Debtors, side: credit, amount: 1000}
+    - {assert: balanced, doc: $pay}
+
+- id: col-05-overallocation-refused
+  category: collection
+  principle: You cannot collect more against an invoice than it is worth.
+  when:
+    - {intent: bill, as: inv, lines: [{item: item_code, qty: 4}]}
+    - {intent: collect, allocate: [{doc: $inv, amount: 5000}]}
+  then: [{assert: refused, matching: exceeds}]
+
+- id: col-06-outstanding-is-derived-not-supplied
+  category: collection
+  principle: Outstanding is a fact about the ledger. A payer does not get to assert it.
+  when:
+    - {intent: bill, as: inv, lines: [{item: item_code, qty: 4}]}
+    - {intent: collect, allocate: [{doc: $inv, amount: 100, outstanding: 100}]}
+  then: [{assert: refused, matching: derived}]
+
+- id: col-07-two-partials-settle
+  category: collection
+  principle: Successive part payments settle an invoice exactly. Rounding never creates or destroys money.
+  when:
+    - {intent: bill, as: inv, lines: [{item: item_code, qty: 4}]}
+    - {intent: collect, allocate: [{doc: $inv, amount: 333.33}]}
+    - {intent: collect, allocate: [{doc: $inv, amount: 666.67}]}
+  then: [{assert: outstanding, doc: $inv, value: 0}]
+
+# ── procure to pay ───────────────────────────────────────────────────────────
+- id: p2p-01-bill-creates-payable
+  category: procure_to_pay
+  principle: A supplier bill creates a payable equal to the billed amount.
+  when: [{intent: expense, lines: [{item: item_code, qty: 4}], header: {bill_no: HL-P2P-01}}]
+  then:
+    - {assert: gl, account: Creditors, side: credit, amount: 480}
+    - {assert: balanced}
+
+- id: p2p-02-bill-total-uses-buying-price
+  category: procure_to_pay
+  principle: A purchase is valued at the purchase price, never the selling price.
+  when: [{intent: expense, lines: [{item: item_code, qty: 4}], header: {bill_no: HL-P2P-02}}]
+  then: [{assert: grand_total, value: 480}]
+
+- id: p2p-03-payment-clears-payable
+  category: procure_to_pay
+  principle: Paying a supplier discharges the liability and reduces cash.
+  when:
+    - {intent: expense, as: bill, lines: [{item: item_code, qty: 4}], header: {bill_no: HL-P2P-03}}
+    - {intent: pay, as: pmt, allocate: [{doc: $bill, amount: 480}]}
+  then:
+    - {assert: outstanding, doc: $bill, value: 0}
+    - {assert: gl, doc: $pmt, account: Creditors, side: debit, amount: 480}
+    - {assert: balanced, doc: $pmt}
+
+- id: p2p-04-partial-supplier-payment
+  category: procure_to_pay
+  principle: Part-paying a bill leaves the rest owed.
+  when:
+    - {intent: expense, as: bill, lines: [{item: item_code, qty: 4}], header: {bill_no: HL-P2P-04}}
+    - {intent: pay, allocate: [{doc: $bill, amount: 180}]}
+  then: [{assert: outstanding, doc: $bill, value: 300}]
+
+- id: p2p-05-overpay-supplier-refused
+  category: procure_to_pay
+  principle: You cannot discharge more liability than exists.
+  when:
+    - {intent: expense, as: bill, lines: [{item: item_code, qty: 4}], header: {bill_no: HL-P2P-05}}
+    - {intent: pay, allocate: [{doc: $bill, amount: 9999}]}
+  then: [{assert: refused, matching: exceeds}]
+
+# ── the derivation contract ──────────────────────────────────────────────────
+- id: der-01-price-list-rate-refused-sell
+  category: derivation_contract
+  principle: A caller may not assert the reference price. No Desk session can.
+  when: [{intent: bill, lines: [{item: item_code, qty: 4, price_list_rate: 0.48}]}]
+  then: [{assert: refused, matching: price_list_rate}]
+
+- id: der-02-price-list-rate-refused-buy
+  category: derivation_contract
+  principle: The same rule binds the buying side. Contracts are symmetric.
+  when: [{intent: expense, lines: [{item: item_code, qty: 4, price_list_rate: 0.5}], header: {bill_no: HL-DER-02}}]
+  then: [{assert: refused, matching: price_list_rate}]
+
+- id: der-03-rate-needs-a-reason
+  category: derivation_contract
+  principle: Selling off-list is a decision. Decisions are recorded, not inferred.
+  when:
+    - intent: bill
+      lines: [{item: item_code, qty: 4}]
+      overrides: [{field: rate, value: 1.0, reason: ""}]
+  then: [{assert: refused, matching: reason}]
+
+- id: der-04-rate-override-with-reason-allowed
+  category: derivation_contract
+  principle: A business may genuinely discount. The record must show it did so deliberately.
+  when:
+    - intent: bill
+      lines: [{item: item_code, qty: 4}]
+      overrides: [{field: rate, value: 1.0, reason: goodwill credit approved by finance}]
+  then:
+    - {assert: grand_total, value: 4}
+    - {assert: balanced}
+
+- id: der-05-derived-field-not-overridable
+  category: derivation_contract
+  principle: Computed values are not opinions. They cannot be overridden at all.
+  when:
+    - intent: bill
+      lines: [{item: item_code, qty: 4}]
+      overrides: [{field: net_amount, value: 1.0, reason: because}]
+  then: [{assert: refused, matching: not overridable}]
+
+- id: der-06-discount-amount-refused
+  category: derivation_contract
+  principle: Discount is the gap between list and agreed price. Asserting it lets the two disagree.
+  when: [{intent: bill, lines: [{item: item_code, qty: 4, discount_amount: 200}]}]
+  then: [{assert: refused, matching: discount_amount}]
+
+- id: der-07-weight-refused
+  category: derivation_contract
+  principle: Item master properties are not transaction values.
+  when: [{intent: bill, lines: [{item: item_code, qty: 4, weight_per_unit: 99}]}]
+  then: [{assert: refused, matching: weight_per_unit}]
+
+- id: der-08-unpriced-item-refused
+  category: derivation_contract
+  principle: If no price can be found, refuse. Guessing a price is worse than failing.
+  when: [{intent: bill, lines: [{item: unpriced_item, qty: 4}]}]
+  then: [{assert: refused, matching: "no price|resolvable"}]
+
+- id: der-10-unpriced-item-refused-on-buy
+  category: derivation_contract
+  principle: The refusal to guess binds both sides of the ledger.
+  when:
+    - intent: expense
+      lines: [{item: unpriced_item, qty: 4}]
+      header: {bill_no: HL-DER-10}
+  then: [{assert: refused, matching: "no price|resolvable"}]
+
+- id: der-09-override-keeps-document-consistent
+  category: derivation_contract
+  principle: An override must leave the document internally consistent, not merely accepted.
+  when:
+    - intent: bill
+      lines: [{item: item_code, qty: 4}]
+      overrides: [{field: rate, value: 200.0, reason: volume deal}]
+  then:
+    - {assert: grand_total, value: 800}
+    - {assert: balanced}
+
+# ── returns ──────────────────────────────────────────────────────────────────
+- id: ret-01-return-cannot-reprice
+  category: returns
+  principle: A return reverses an agreed transaction. It may not reprice history.
+  when:
+    - intent: return
+      header: {is_return: 1}
+      lines: [{item: item_code, qty: -1}]
+      overrides: [{field: rate, value: 99.0, reason: renegotiated}]
+  then: [{assert: refused, matching: refused}]
+
+- id: ret-02-return-also-refuses-price-list-rate
+  category: returns
+  principle: Every refusal that binds a sale binds its reversal.
+  when:
+    - intent: return
+      header: {is_return: 1}
+      lines: [{item: item_code, qty: -1, price_list_rate: 5}]
+  then: [{assert: refused, matching: price_list_rate}]
+
+# ── period and structure guards ──────────────────────────────────────────────
+- id: grd-01-unknown-intent-refused
+  category: guards
+  principle: An unknown operation is refused, never approximated.
+  when: [{intent: teleport, lines: [{item: item_code, qty: 1}]}]
+  then: [{assert: refused, matching: unknown intent}]
+
+- id: grd-02-quotation-has-no-outstanding
+  category: guards
+  principle: A document that posts nothing owes nothing.
+  when: [{intent: quote, lines: [{item: item_code, qty: 4}]}]
+  then: [{assert: no_gl}]
+
+- id: grd-03-submitted-invoice-is-docstatus-1
+  category: guards
+  principle: Submission is a real state change. A posted invoice is not a draft.
+  when: [{intent: bill, lines: [{item: item_code, qty: 4}]}]
+  then: [{assert: docstatus, value: 1}]
+
+- id: grd-04-draft-posts-nothing
+  category: guards
+  principle: A draft has no effect on the ledger. Nothing is real until submitted.
+  when: [{intent: bill, lines: [{item: item_code, qty: 4}], submit: false}]
+  then:
+    - {assert: docstatus, value: 0}
+    - {assert: no_gl}

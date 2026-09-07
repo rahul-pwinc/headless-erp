@@ -6,9 +6,9 @@ This repo tests that property. It starts with ERPNext, because it is the most co
 
 ## The finding
 
-ERPNext's Desk UI derives item values before a document is ever saved. Pick an item, and the browser calls a server method that fills in the rate from the Price List, the tax template, the income account, the UOM conversion. A caller that speaks only to `/api/resource` never triggers that step.
+ERPNext's Desk UI derives item values before a document is saved. Pick an item, and the browser calls a whitelisted server method that fills the rate from the Price List, the tax template, the income account, the UOM conversion. A caller that speaks only to `/api/resource` never triggers that step.
 
-Server-side, `AccountsController.set_missing_item_details` back-fills those values, but only when the field is `None`:
+Server-side, `AccountsController.set_missing_item_details` back-fills those values, but **only when the field is `None`**:
 
 ```python
 # erpnext/controllers/accounts_controller.py:1127  (v16.34.1)
@@ -20,21 +20,21 @@ if (
     item.set(fieldname, value)
 ```
 
-`force_item_fields` has exactly nine members (`accounts_controller.py:97`): `item_group`, `brand`, `stock_uom`, `is_fixed_asset`, `pricing_rules`, `weight_per_unit`, `weight_uom`, `total_weight`, `valuation_rate`.
+`force_item_fields` has exactly nine members (`accounts_controller.py:97`): `item_group`, `brand`, `stock_uom`, `is_fixed_asset`, `pricing_rules`, `weight_per_unit`, `weight_uom`, `total_weight`, `valuation_rate`. `rate` and `price_list_rate` are in neither set.
 
-`rate` and `price_list_rate` are in neither set.
-
-So a caller that supplies its own `rate` keeps it. The Price List is never consulted. `Selling Settings.validate_selling_price` defaults to `0`, so nothing catches selling below cost either.
+So a caller that supplies its own `rate` keeps it, and the Price List is never consulted for that row.
 
 ## Measured result
 
-Same business intent both ways: 4 units of an item priced at 250.00 in `Standard Selling`.
+Same business intent both ways: 4 units of an item priced at 250.00 in `Standard Selling`, against a live ERPNext v16.34.1.
 
-| | UI-derivation path | Naive API path |
+| field | UI-derivation path | Naive API path |
 |---|---|---|
 | `rate` | 250.00 | **1.00** |
+| `price_list_rate` | 250.00 | 250.00 |
+| `discount_amount` | 0.00 | **249.00** |
 | `grand_total` | 1000.00 | **4.00** |
-| GL entries balance | ✅ | ✅ |
+| GL entries balance | yes | yes |
 
 ```
 === UI-path invoice: ACC-SINV-2026-00007 ===
@@ -48,9 +48,19 @@ Same business intent both ways: 4 units of an item priced at 250.00 in `Standard
   TOTAL               Dr       4.00   Cr       4.00   balanced=True
 ```
 
-**The books balance perfectly.** Debits equal credits. The trial balance nets to zero. Every accounting invariant holds. The document is structurally flawless and semantically garbage.
+## What this does and does not show
 
-That is the point of this repo. **Invariant checking cannot detect this class of defect.** A property-based test harness asserting "debits equal credits, subledgers tie to the GL, stock value reconciles" finds nothing here. Catching it requires a *differential* oracle: run the same intent down both paths and diff the documents.
+**It does not show that the API accepts something the UI forbids.** `rate` is not read-only (`sales_invoice_item.json`), so a human can type 1.00 deliberately. The server then computes `discount_amount = 249.00` exactly as the browser would (`transaction.js:70-90`). The resulting document is **internally consistent**.
+
+That consistency is the actual problem:
+
+1. **The caller never sees the derived value.** A human watches 250.00 populate, then overrides it. They know what they changed and by how much. An API caller that supplies 1.00 receives no indication that a Price List entry existed at all. Nothing in the response says "you skipped derivation."
+
+2. **The document is indistinguishable from a deliberate decision.** After the fact, `price_list_rate=250, rate=1, discount_amount=249` reads as an authorised 99.6% discount. There is no field, flag, or log entry separating *"a salesperson approved a discount"* from *"an agent did not know the list price."*
+
+3. **Every accounting invariant holds.** Debits equal credits. The trial balance nets to zero. A property-based harness asserting ledger integrity finds nothing here.
+
+The failure mode for agent-driven ERP is therefore not corruption. It is **laundering**: the system converts a machine's missing context into a record that looks like human judgment, and the audit trail actively conceals the difference. Catching it needs a differential oracle — run the same intent down both paths and diff — not an invariant checker.
 
 ## The control matters
 

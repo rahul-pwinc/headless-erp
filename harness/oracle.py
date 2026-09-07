@@ -39,6 +39,10 @@ from client import FrappeClient
 DERIVED_ITEM_FIELDS = [
     "rate",
     "price_list_rate",
+    "discount_amount",
+    "discount_percentage",
+    "net_rate",
+    "rate_with_margin",
     "uom",
     "conversion_factor",
     "stock_uom",

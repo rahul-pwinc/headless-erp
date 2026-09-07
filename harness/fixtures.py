@@ -55,7 +55,6 @@ def ensure_item(client: FrappeClient) -> None:
             {
                 "doctype": "Item",
                 "item_code": ITEM_CODE,
-        "unpriced_item": UNPRICED_ITEM,
                 "item_name": "Headless Widget",
                 "item_group": ITEM_GROUP,
                 "stock_uom": "Nos",
@@ -79,7 +78,6 @@ def ensure_item(client: FrappeClient) -> None:
             {
                 "doctype": "Item Price",
                 "item_code": ITEM_CODE,
-        "unpriced_item": UNPRICED_ITEM,
                 "price_list": PRICE_LIST,
                 "price_list_rate": LIST_PRICE,
             }

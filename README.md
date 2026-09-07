@@ -52,15 +52,15 @@ Same business intent both ways: 4 units of an item priced at 250.00 in `Standard
 
 **It does not show that the API accepts something the UI forbids.** `rate` is not read-only (`sales_invoice_item.json`), so a human can type 1.00 deliberately. The server then computes `discount_amount = 249.00` exactly as the browser would (`transaction.js:70-90`). The resulting document is **internally consistent**.
 
-That consistency is the actual problem:
+**It does not show that the caller is blind.** An earlier version of this README claimed an API caller "receives no indication that a Price List entry existed." That was wrong, and it is retracted. The write response returns the saved document, which contains `price_list_rate: 250.0` and `discount_amount: 249.0`. A caller that reads its own response can see exactly what the list price was. Verified empirically.
 
-1. **The caller never sees the derived value.** A human watches 250.00 populate, then overrides it. They know what they changed and by how much. An API caller that supplies 1.00 receives no indication that a Price List entry existed at all. Nothing in the response says "you skipped derivation."
+**What survives is the post-hoc point, and only that.**
 
-2. **The document is indistinguishable from a deliberate decision.** After the fact, `price_list_rate=250, rate=1, discount_amount=249` reads as an authorised 99.6% discount. There is no field, flag, or log entry separating *"a salesperson approved a discount"* from *"an agent did not know the list price."*
+Six months later, the record reads `price_list_rate=250, rate=1, discount_amount=249`. That is indistinguishable from an authorised 99.6% discount. Nothing in the document, the ledger, or any log separates *"a salesperson approved this"* from *"an agent never looked."* The system does not record whether a decision occurred, only its arithmetic consequence.
 
-3. **Every accounting invariant holds.** Debits equal credits. The trial balance nets to zero. A property-based harness asserting ledger integrity finds nothing here.
+That is a narrower claim than the one this repo opened with. It is also the only one the evidence supports.
 
-The failure mode for agent-driven ERP is therefore not corruption. It is **laundering**: the system converts a machine's missing context into a record that looks like human judgment, and the audit trail actively conceals the difference. Catching it needs a differential oracle — run the same intent down both paths and diff — not an invariant checker.
+**On novelty, plainly:** a caller-supplied rate winning over the price list is documented, intended ERPNext behaviour, not a bug. And "the API does not enforce field-level `read_only`" is a general property of Frappe, true of every read-only field on every doctype, not something specific to ERPNext or to pricing. Neither is a discovery. What is worth naming is the *consequence*: the class of ERP field where the server holds a correct value, the caller may overwrite it, and the resulting record is downstream-indistinguishable from a deliberate human decision.
 
 ## Phase 2 — the census
 
@@ -77,7 +77,23 @@ silently accepted   : 6 distinct fields
   weight_per_unit, min_order_qty
 ```
 
-**144 of 196 probes were protected.** ERPNext recomputes `amount`, `net_rate`, `base_rate`, `stock_qty`, `conversion_factor` and 16 other fields regardless of what the caller sends. This is not a system with no defences. The gap is specific and small, which is what makes it worth naming.
+**Read that 144 honestly.** Most of the "protected" fields are arithmetic the server recomputes anyway: `amount`, `net_amount`, `base_rate`, `base_amount`, `net_rate`, `stock_qty`. Those are not a derivation contract defending itself, they are a total being recalculated. Counting them alongside genuine derivation decisions inflates the ratio, and an earlier version of this section did exactly that.
+
+The honest shape is smaller: **6 distinct fields, on 8 of 9 doctypes, from one derivation path** (`get_item_details`). The 196 figure is 6 fields times the doctypes they appear on, not 196 independent findings. All 10 "rejected" probes are the same probe — `qty` mutated to 0.016, failing validation — not 10 separate results.
+
+`reports/derivation_map.md` extends this beyond `get_item_details`; until it lands, treat the census as covering one mechanism.
+
+### `weight_per_unit` is in the force list and still accepted
+
+This looked like a contradiction and was left unexplained in an earlier version. It is not a broken probe. `get_item_details.py:620`:
+
+```python
+"weight_per_unit": ctx.weight_per_unit or item.get("weight_per_unit"),
+```
+
+The derivation reads the caller's own value back out of the row. So the force-overwrite does fire, and it writes the caller's number. `total_weight` then computed 28.0 from the fabricated 7.0.
+
+**Membership in `force_item_fields` guarantees the derived value wins. It does not guarantee the derived value is independent of the caller.** That is a sharper statement of the mechanism than "the server declines to overwrite," and it is the more interesting failure: a protection list that is circular for at least one of its nine members.
 
 ### The part the UI cannot do
 
@@ -239,18 +255,35 @@ Which kills the obvious mitigation. You cannot detect a mispriced agent write by
 
 Same invoices. Same totals. Same ledger. The only difference is that 1,091 line items either explain themselves or do not.
 
-### The trial balance
+### The trial balance proves nothing, and that is the point
+
+An earlier version of this README presented a balanced trial balance as a finding. It is not one, and presenting it that way was wrong.
+
+ERPNext **refuses to post an unbalanced voucher**. `raise_debit_credit_not_equal_error` in `erpnext/accounts/general_ledger.py` throws before anything reaches the ledger. So:
 
 ```
-  GL entries      : 6,466
+  GL entries       : 6,466
   submitted invoices: 2,223
-  total debits    :  451,856.02
-  total credits   :  451,856.02
-  difference      :        0.00
-  BALANCED        : True
+  total debits     :  451,856.02
+  total credits    :  451,856.02
+  difference       :        0.00
 ```
 
-**Perfect.** After a thousand invoices carrying 1,091 prices that no one recorded a decision for, the books balance to the penny. Every invariant an auditor would check passes. This is the entire argument in one number: ledger integrity is not evidence of correctness, and any verification strategy built on invariants alone will report a clean bill of health on this company.
+That result was **guaranteed by construction**. It could not have come out any other way. Running it and reporting it as a discovery would insult anyone who knows the system.
+
+The only legitimate use of it is the inverse: **balance is enforced, therefore balance carries no information about correctness.** A control that cannot fail is not a control. Any assurance process whose ledger check is "do debits equal credits" will pass this company, and would pass it no matter what prices were written. That was always the argument; the demonstration added nothing to it and has been demoted to an illustration.
+
+### What the replay does and does not measure
+
+Equally plainly: **the replay is a round-trip test, not a detection test.**
+
+`harness/simulate.py` computes which lines differ from list price, passes exactly those as overrides, and then reports that the engine recorded that many overrides. Of course it did. It proves the override path preserves information end to end at volume. It does **not** show the system detected anything, because the system was told.
+
+This is not a defect that can be engineered away, and that matters more than the demo:
+
+**Post-hoc detection of this class of error is impossible.** If a third of legitimate lines price off-list, no rule over stored documents can separate a real wholesale price from an agent that never looked one up. Both produce the same row. The information that would distinguish them, namely whether anybody decided, exists only at the moment of writing and only if it is captured then.
+
+So this is not a scanner and it is not an anomaly detector. **It is a write-time control.** That is a narrower product than "we find your bad data," and it is the only honest one.
 
 ### What the real data found in our own code
 

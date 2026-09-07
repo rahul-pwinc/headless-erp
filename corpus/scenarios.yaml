@@ -248,15 +248,6 @@ scenarios:
   when: [{intent: bill, lines: [{item: unpriced_item, qty: 4}]}]
   then: [{assert: refused, matching: "no price|resolvable"}]
 
-- id: der-10-unpriced-item-refused-on-buy
-  category: derivation_contract
-  principle: The refusal to guess binds both sides of the ledger.
-  when:
-    - intent: expense
-      lines: [{item: unpriced_item, qty: 4}]
-      header: {bill_no: HL-DER-10}
-  then: [{assert: refused, matching: "no price|resolvable"}]
-
 - id: der-09-override-keeps-document-consistent
   category: derivation_contract
   principle: An override must leave the document internally consistent, not merely accepted.
@@ -267,6 +258,15 @@ scenarios:
   then:
     - {assert: grand_total, value: 800}
     - {assert: balanced}
+- id: der-10-unpriced-item-refused-on-buy
+  category: derivation_contract
+  principle: The refusal to guess binds both sides of the ledger.
+  when:
+    - intent: expense
+      lines: [{item: unpriced_item, qty: 4}]
+      header: {bill_no: HL-DER-10}
+  then: [{assert: refused, matching: "no price|resolvable"}]
+
 
 # ── returns ──────────────────────────────────────────────────────────────────
 - id: ret-01-return-cannot-reprice

@@ -55,10 +55,13 @@ corpus:
 	@echo "==> corpus: done -- reports/corpus.json"
 
 # --- Phase 6: replay real invoices at scale -------------------------------
+# --invoices 1000 matches the committed reports/simulation.json and the
+# README's Phase 6 numbers (harness/simulate.py defaults to 250 invoices,
+# which is faster but will not reproduce those exact figures).
 simulate: data
-	@echo "==> simulate: Phase 6 replay of real invoices, naive path vs intent path"
-	@echo "    (1,000 invoices by default -- can take several minutes against a local stack)"
-	$(PYTHON) harness/simulate.py
+	@echo "==> simulate: Phase 6 replay of 1,000 real invoices, naive path vs intent path"
+	@echo "    (~6 minutes against a local stack; see docs/REPRODUCE.md to run fewer invoices)"
+	$(PYTHON) harness/simulate.py --invoices 1000
 	@echo "==> simulate: done -- reports/simulation.json"
 
 # --- the whole thing, in the order the README presents it -----------------

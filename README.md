@@ -232,11 +232,35 @@ Treating the median price per SKU as the price list, and excluding non-product c
   SKUs sold at more than one price : 4,309 / 4,873  (88.4%)
 ```
 
-**Nearly a third of real line items do not sell at list price, and they carry half the revenue.** The deviation is bimodal — this wholesaler also sells retail, so the same SKU legitimately has two price points depending on the customer.
+**The headline number depends entirely on what you call the list price, and an earlier version of this README picked the flattering definition.** Here is every reference we computed, including the ones that weaken the argument.
 
-This is the finding that makes the defect serious, and it is the opposite of what you would assume. **Off-list is not an anomaly. It is normal.**
+| reference for "list price" | off-reference | caveat |
+|---|---|---|
+| per-SKU median across all customers | **31.4%** | partly an artifact: this wholesaler also sells retail, so a single median puts roughly half the lines off by construction |
+| per-customer modal price for that SKU | **3.4%** | flattering the other way: 42.9% of lines are the only purchase of that SKU by that customer, so they are trivially at-reference |
+| per-customer modal, pairs with 2+ purchases | **6.0%** | the honest cut |
+| per-customer modal, pairs with 6+ purchases | **8.9%** | where an established "usual price" genuinely exists |
 
-Which kills the obvious mitigation. You cannot detect a mispriced agent write by flagging prices that differ from the list, because 31.4% of correct writes differ from the list. There is no statistical signal to separate a legitimate wholesale price from an agent that never looked up the price at all. The only place the distinction exists is at the moment of writing, in whether anyone recorded a decision.
+`reports/dataset_analysis.json` carries the first two; the last two are reproducible from `data/sales_clean.csv`.
+
+**So the defensible number is 6 to 9 percent, not a third.** A single global price list overstates it; ERPNext models per-customer pricing properly with customer-group price lists, and against a well-maintained baseline the real deviation rate is single digits.
+
+### What that does to the argument, stated plainly
+
+An earlier version of this README claimed post-hoc detection is **impossible**. That was an overclaim and it is retracted.
+
+At 6 to 9 percent, a detector that flags every line deviating from an established customer-specific price is **feasible**. It is also expensive and imprecise: on a million line items a year that is 60,000 to 90,000 lines into a review queue, almost all of them legitimate, forever. Precision does not improve with volume because the deviation is real business behaviour, not noise to be filtered out.
+
+The honest comparison is therefore not "impossible versus possible". It is:
+
+| approach | false positives | what it actually answers |
+|---|---|---|
+| post-hoc detection | 6 to 9 percent of all lines | "is this price unusual?" |
+| write-time capture | none | "did anybody decide this?" |
+
+Those are different questions, and only the second one is the question an auditor is asking. A price can be unusual and correct, or ordinary and unconsidered. Deviation is a proxy; a recorded reason is the fact itself.
+
+That is a narrower claim than this repo started with. It is the one the data supports.
 
 ### Then, replay it
 

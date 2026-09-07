@@ -381,7 +381,15 @@ class IntentEngine:
         parent["doctype"] = doctype
         rows: list[dict] = []
         for idx, line in enumerate(lines):
+            # `uom` is a legitimate caller input: selling in Boxes rather than
+            # Nos is a business fact, not a derived one. It has to reach the ctx
+            # or get_item_details cannot compute the conversion factor, and a
+            # uom != stock_uom case becomes unreachable through this path -- as
+            # it was until corpus scenario srv-01 exposed it. The FACTOR stays
+            # refused; only the unit the caller is trading in comes from them.
             probe = {"item_code": line["item_code"], "qty": line.get("qty", 1)}
+            if line.get("uom"):
+                probe["uom"] = line["uom"]
             derived = self.client.call(
                 "erpnext.stock.get_item_details.get_item_details",
                 doc=json.dumps(parent),
@@ -421,6 +429,30 @@ class IntentEngine:
                 )
                 row[fname] = o["value"]
             rows.append(row)
+
+        # A named tax template must actually be applied. ERPNext will accept a
+        # document that names an 18% template and carries no tax rows, or a
+        # forged 0% row, and post no tax at all (corpus tax-01, tax-02). Naming
+        # a template is a caller decision; the RATES that template implies are
+        # not. So derive them.
+        if parent.get("taxes_and_charges") and not parent.get("taxes"):
+            master_dt = ("Sales Taxes and Charges Template"
+                         if spec["maps_to"]["doctype"] in
+                            ("Sales Invoice", "Sales Order", "Delivery Note", "Quotation")
+                         else "Purchase Taxes and Charges Template")
+            derived_taxes = self.client.call(
+                # v16.34.1 path. It moved to erpnext.accounts.services.taxes in
+                # v17-dev; we target the version this repo actually runs against.
+                # (Read the tag, not the working tree. Getting that wrong is how
+                # this call 417'd the first time.)
+                "erpnext.controllers.accounts_controller.get_taxes_and_charges",
+                master_doctype=master_dt, master_name=parent["taxes_and_charges"]) or []
+            if not derived_taxes:
+                raise IntentRefused(
+                    f"{intent_id}: tax template {parent['taxes_and_charges']!r} resolved to no "
+                    f"rows. Refusing to post a document that claims a tax treatment it does "
+                    f"not carry.")
+            parent["taxes"] = derived_taxes
 
         doc = dict(parent)
         doc["items"] = rows

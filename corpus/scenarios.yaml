@@ -267,6 +267,183 @@ scenarios:
       header: {bill_no: HL-DER-10}
   then: [{assert: refused, matching: "no price|resolvable"}]
 
+# reports/derivation_map.md found eight findings beyond the original
+# get_item_details/rate path. der-11 through tax-02 below extend the
+# contract to cover them, in the priority order they were reported.
+
+- id: der-11-conversion-rate-refused
+  category: derivation_contract
+  principle: >
+    The exchange rate on a posting date is a published fact, not a
+    commercial judgment. A caller may not assert it.
+  when:
+    - intent: bill
+      header: {currency: USD, conversion_rate: 1.0}
+      lines: [{item: item_code, qty: 4}]
+  then: [{assert: refused, matching: conversion_rate}]
+
+- id: der-12-plc-conversion-rate-refused
+  category: derivation_contract
+  principle: The price list's own currency conversion is a published fact too. Same rule.
+  when:
+    - intent: bill
+      header: {currency: USD, plc_conversion_rate: 1.0}
+      lines: [{item: item_code, qty: 4}]
+  then: [{assert: refused, matching: plc_conversion_rate}]
+
+- id: der-13-conversion-rate-not-overridable
+  category: derivation_contract
+  principle: >
+    Unlike a price, a published exchange rate has no legitimate override
+    case: it is refused outright, never offered as an override.
+  when:
+    - intent: bill
+      header: {currency: USD}
+      lines: [{item: item_code, qty: 4}]
+      overrides: [{field: conversion_rate, value: 1.0, reason: because}]
+  then: [{assert: refused, matching: "cannot be overridden"}]
+
+- id: der-14-foreign-currency-posts-at-published-rate
+  category: derivation_contract
+  principle: >
+    A foreign-currency invoice must post to the ledger at the published
+    rate for its posting date, not at whatever the caller happened to
+    hold. (fixtures pin USD->INR at 90.0 for 2026-09-07 so this number is
+    reproducible on any day, not just the day the live rate was fetched.)
+  when:
+    - intent: bill
+      header: {currency: USD}
+      lines: [{item: item_code, qty: 4}]
+  then:
+    - {assert: gl, account: Debtors, side: debit, amount: 1000.80}
+    - {assert: gl, account: Sales, side: credit, amount: 1000.80}
+    - {assert: balanced}
+
+- id: uom-01-conversion-factor-refused
+  category: derivation_contract
+  principle: The unit-of-measure conversion belongs to the item master. A caller may not assert it.
+  when:
+    - intent: bill
+      lines: [{item: item_code, qty: 4, conversion_factor: 7}]
+  then: [{assert: refused, matching: conversion_factor}]
+
+- id: acct-01-income-account-refused
+  category: derivation_contract
+  principle: >
+    Revenue posts to a revenue account the item and company setup
+    determine, not one a caller names. (This is the exact shape of drift
+    fixtures.assert_clean_fixtures() now catches: a probe once left this
+    as the fixture item's *default*, not just a one-off caller value, and
+    every invoice quietly booked revenue to Interest Income instead of
+    Sales while the books kept balancing.)
+  when:
+    - intent: bill
+      lines: [{item: item_code, qty: 4, income_account: "Interest Income - HTC"}]
+  then: [{assert: refused, matching: income_account}]
+
+- id: acct-02-expense-account-refused
+  category: derivation_contract
+  principle: As income_account, on the buying side.
+  when:
+    - intent: expense
+      header: {bill_no: HL-ACCT-02}
+      lines: [{item: item_code, qty: 2, expense_account: "Marketing Expenses - HTC"}]
+  then: [{assert: refused, matching: expense_account}]
+
+- id: tax-01-named-template-with-no-rows-produces-no-tax
+  category: derivation_contract
+  principle: >
+    Naming a tax template must apply that template's rates, or the
+    document must be refused. It may not name an 18% template and carry
+    no tax at all.
+  # KNOWN FAILING -- reports/derivation_map.md finding 2, section 4.2.
+  # Neither the intent layer nor ERPNext itself compares a document's tax
+  # rows to the template it names: accounts_controller.py:1300 accepts any
+  # caller-supplied `taxes` table (including an empty one) unconditionally,
+  # and the append-from-template fallback in selling_controller.py:155
+  # never runs on an API insert because for_validate is always True there.
+  # Left failing on purpose -- this is a real, open gap in the intent
+  # contract, not a scenario bug. Do not adjust the expected value to make
+  # it pass.
+  when:
+    - intent: bill
+      header: {taxes_and_charges: "HL Sales Tax 18 - HTC"}
+      lines: [{item: item_code, qty: 4}]
+  then: [{assert: grand_total, value: 1180}]
+
+- id: tax-02-forged-zero-rate-row-against-named-template
+  category: derivation_contract
+  principle: >
+    A tax row claiming to belong to an 18% template may not carry a 0%
+    rate. Either the row matches the template it names, or the document
+    is refused.
+  # Was KNOWN FAILING. Closed by adding `taxes` to the refused set: nothing
+  # in ERPNext compares tax rows against the template they cite, so a caller
+  # that hand-crafts rows can make a document claim a treatment it does not
+  # carry. Naming a template is a caller decision; the rates it implies are
+  # not, so the engine derives them and refuses caller-supplied rows.
+  when:
+    - intent: bill
+      header:
+        taxes_and_charges: "HL Sales Tax 18 - HTC"
+        taxes:
+          - charge_type: "On Net Total"
+            account_head: "Sales Expenses - HTC"
+            description: "GST 18"
+            rate: 0
+      lines: [{item: item_code, qty: 4}]
+  then: [{assert: refused, matching: taxes}]
+
+
+# ── what the intent layer cannot reach: naive-caller findings ────────────────
+# These use the `raw` step (see harness/corpus.py docstring): a direct insert
+# that bypasses IntentEngine entirely, because the finding lives in a code
+# path the intent layer's own derive step never touches. They exist to prove
+# the hole is real, not to test the contract -- the contract has no opinion
+# here because the caller never went through it.
+
+- id: srv-01-conversion-factor-follows-item-uom-not-caller
+  category: server_derivation
+  principle: >
+    The quantity recorded in the stock ledger must follow the item's own
+    UOM conversion, not the caller's assertion of it.
+  # KNOWN FAILING -- reports/derivation_map.md finding 7. Master says
+  # Box = 10 for this item (fixtures.ensure_box_uom); a caller naming
+  # uom=Box and asserting conversion_factor=7 gets exactly that stored,
+  # and stock_qty is computed from the forged factor: 7 * 7 = 49, not the
+  # true 7 * 10 = 70. This cannot be demonstrated through the intent path
+  # at all: IntentEngine.execute() already refuses a caller-supplied
+  # conversion_factor outright (see uom-01) before any uom mismatch would
+  # matter, and its derive step does not currently forward a line's uom to
+  # the server when deriving, so there is no sanctioned path that reaches
+  # this bug. `raw` bypasses the intent layer to show it is real anyway.
+  when:
+    - raw:
+        lines: [{item: item_code, qty: 7, uom: Box, conversion_factor: 7, rate: 250}]
+        submit: false
+  then: [{assert: line_field, row: 0, field: stock_qty, value: 70}]
+
+- id: srv-02-naive-write-must-not-redefine-master-price
+  category: server_derivation
+  principle: A transaction may not silently redefine master data.
+  # KNOWN FAILING -- reports/derivation_map.md finding 5. Stock Settings
+  # .auto_insert_price_list_rate_if_missing is 1 on this instance; a naive
+  # write with a rate for an item that has no Item Price anywhere creates
+  # one, at the caller's number, and every honest caller after this one
+  # now derives that forged price as the list. Uses a dedicated throwaway
+  # item (fixtures.ensure_price_mutation_item), which self-heals before
+  # every run rather than accumulating stray Item Price rows -- it is not
+  # UNPRICED_ITEM, which every other scenario relies on staying clean.
+  # Contrast with der-08/der-10: going through the intent path with this
+  # same item and no price resolvable is refused before any rate is ever
+  # considered, so this mutation is reachable only by a caller that
+  # bypasses the intent layer -- which is exactly what `raw` does here.
+  when:
+    - raw:
+        lines: [{item: price_mutation_item, qty: 1, rate: 4321}]
+        submit: false
+  then: [{assert: item_price, item: price_mutation_item, exists: false}]
+
 
 # ── returns ──────────────────────────────────────────────────────────────────
 - id: ret-01-return-cannot-reprice

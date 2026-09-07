@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-09-07T19:30:25.822171+00:00",
+  "generated_at": "2026-09-07T19:35:41.143513+00:00",
   "erpnext_version": "v16.34.1",
-  "passed": 39,
-  "total": 39,
+  "passed": 48,
+  "total": 50,
   "by_category": {
     "order_to_cash": {
       "passed": 6,
@@ -21,8 +21,12 @@
       "total": 5
     },
     "derivation_contract": {
-      "passed": 10,
-      "total": 10
+      "passed": 19,
+      "total": 19
+    },
+    "server_derivation": {
+      "passed": 0,
+      "total": 2
     },
     "returns": {
       "passed": 2,
@@ -41,7 +45,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00023"
+        "Sales Invoice/ACC-SINV-2026-03241"
       ],
       "notes": []
     },
@@ -52,7 +56,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00024"
+        "Sales Invoice/ACC-SINV-2026-03242"
       ],
       "notes": []
     },
@@ -63,7 +67,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00025"
+        "Sales Invoice/ACC-SINV-2026-03243"
       ],
       "notes": []
     },
@@ -74,7 +78,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00026"
+        "Sales Invoice/ACC-SINV-2026-03244"
       ],
       "notes": []
     },
@@ -85,7 +89,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00027"
+        "Sales Invoice/ACC-SINV-2026-03245"
       ],
       "notes": []
     },
@@ -96,7 +100,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00028"
+        "Sales Invoice/ACC-SINV-2026-03246"
       ],
       "notes": []
     },
@@ -107,7 +111,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Quotation/SAL-QTN-2026-00023"
+        "Quotation/SAL-QTN-2026-00103"
       ],
       "notes": []
     },
@@ -118,7 +122,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Order/SAL-ORD-2026-00022"
+        "Sales Order/SAL-ORD-2026-00068"
       ],
       "notes": []
     },
@@ -129,7 +133,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Order/PUR-ORD-2026-00021"
+        "Purchase Order/PUR-ORD-2026-00061"
       ],
       "notes": []
     },
@@ -140,7 +144,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Material Request/MAT-MR-2026-00022"
+        "Material Request/MAT-MR-2026-00063"
       ],
       "notes": []
     },
@@ -151,7 +155,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Quotation/SAL-QTN-2026-00024"
+        "Quotation/SAL-QTN-2026-00104"
       ],
       "notes": []
     },
@@ -162,8 +166,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00029",
-        "Payment Entry/ACC-PAY-2026-00001"
+        "Sales Invoice/ACC-SINV-2026-03247",
+        "Payment Entry/ACC-PAY-2026-00148"
       ],
       "notes": []
     },
@@ -174,8 +178,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00030",
-        "Payment Entry/ACC-PAY-2026-00002"
+        "Sales Invoice/ACC-SINV-2026-03248",
+        "Payment Entry/ACC-PAY-2026-00149"
       ],
       "notes": []
     },
@@ -186,8 +190,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00031",
-        "Payment Entry/ACC-PAY-2026-00003"
+        "Sales Invoice/ACC-SINV-2026-03249",
+        "Payment Entry/ACC-PAY-2026-00150"
       ],
       "notes": []
     },
@@ -198,8 +202,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00032",
-        "Payment Entry/ACC-PAY-2026-00004"
+        "Sales Invoice/ACC-SINV-2026-03250",
+        "Payment Entry/ACC-PAY-2026-00151"
       ],
       "notes": []
     },
@@ -210,10 +214,10 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00033"
+        "Sales Invoice/ACC-SINV-2026-03251"
       ],
       "notes": [
-        "refused: collect: allocating 5000.0 to ACC-SINV-2026-00033 exceeds its outstanding of 1000.0."
+        "refused: collect: allocating 5000.0 to ACC-SINV-2026-03251 exceeds its outstanding of 1000.0."
       ]
     },
     {
@@ -223,10 +227,10 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00034"
+        "Sales Invoice/ACC-SINV-2026-03252"
       ],
       "notes": [
-        "refused: collect: outstanding is derived from ACC-SINV-2026-00034, not supplied."
+        "refused: collect: outstanding is derived from ACC-SINV-2026-03252, not supplied."
       ]
     },
     {
@@ -236,9 +240,9 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00035",
-        "Payment Entry/ACC-PAY-2026-00005",
-        "Payment Entry/ACC-PAY-2026-00006"
+        "Sales Invoice/ACC-SINV-2026-03253",
+        "Payment Entry/ACC-PAY-2026-00152",
+        "Payment Entry/ACC-PAY-2026-00153"
       ],
       "notes": []
     },
@@ -249,7 +253,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00021"
+        "Purchase Invoice/ACC-PINV-2026-00139"
       ],
       "notes": []
     },
@@ -260,7 +264,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00022"
+        "Purchase Invoice/ACC-PINV-2026-00140"
       ],
       "notes": []
     },
@@ -271,8 +275,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00023",
-        "Payment Entry/ACC-PAY-2026-00007"
+        "Purchase Invoice/ACC-PINV-2026-00141",
+        "Payment Entry/ACC-PAY-2026-00154"
       ],
       "notes": []
     },
@@ -283,8 +287,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00024",
-        "Payment Entry/ACC-PAY-2026-00008"
+        "Purchase Invoice/ACC-PINV-2026-00142",
+        "Payment Entry/ACC-PAY-2026-00155"
       ],
       "notes": []
     },
@@ -295,10 +299,10 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00025"
+        "Purchase Invoice/ACC-PINV-2026-00143"
       ],
       "notes": [
-        "refused: pay: allocating 9999.0 to ACC-PINV-2026-00025 exceeds its outstanding of 480.0."
+        "refused: pay: allocating 9999.0 to ACC-PINV-2026-00143 exceeds its outstanding of 480.0."
       ]
     },
     {
@@ -341,7 +345,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00036"
+        "Sales Invoice/ACC-SINV-2026-03254"
       ],
       "notes": []
     },
@@ -396,7 +400,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00037"
+        "Sales Invoice/ACC-SINV-2026-03255"
       ],
       "notes": []
     },
@@ -410,6 +414,131 @@
       "notes": [
         "refused: expense: line 0: no price is resolvable for 'HL-UNPRICED-001' in 'Standard Buying'. Refusing to guess a rate."
       ]
+    },
+    {
+      "id": "der-11-conversion-rate-refused",
+      "category": "derivation_contract",
+      "principle": "The exchange rate on a posting date is a published fact, not a commercial judgment. A caller may not assert it.\n",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: header may not supply 'conversion_rate'."
+      ]
+    },
+    {
+      "id": "der-12-plc-conversion-rate-refused",
+      "category": "derivation_contract",
+      "principle": "The price list's own currency conversion is a published fact too. Same rule.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: header may not supply 'plc_conversion_rate'."
+      ]
+    },
+    {
+      "id": "der-13-conversion-rate-not-overridable",
+      "category": "derivation_contract",
+      "principle": "Unlike a price, a published exchange rate has no legitimate override case: it is refused outright, never offered as an override.\n",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: 'conversion_rate' is refused and cannot be overridden."
+      ]
+    },
+    {
+      "id": "der-14-foreign-currency-posts-at-published-rate",
+      "category": "derivation_contract",
+      "principle": "A foreign-currency invoice must post to the ledger at the published rate for its posting date, not at whatever the caller happened to hold. (fixtures pin USD->INR at 90.0 for 2026-09-07 so this number is reproducible on any day, not just the day the live rate was fetched.)\n",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-03256"
+      ],
+      "notes": []
+    },
+    {
+      "id": "uom-01-conversion-factor-refused",
+      "category": "derivation_contract",
+      "principle": "The unit-of-measure conversion belongs to the item master. A caller may not assert it.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: line 0 may not supply 'conversion_factor'."
+      ]
+    },
+    {
+      "id": "acct-01-income-account-refused",
+      "category": "derivation_contract",
+      "principle": "Revenue posts to a revenue account the item and company setup determine, not one a caller names. (This is the exact shape of drift fixtures.assert_clean_fixtures() now catches: a probe once left this as the fixture item's *default*, not just a one-off caller value, and every invoice quietly booked revenue to Interest Income instead of Sales while the books kept balancing.)\n",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: line 0 may not supply 'income_account'."
+      ]
+    },
+    {
+      "id": "acct-02-expense-account-refused",
+      "category": "derivation_contract",
+      "principle": "As income_account, on the buying side.",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: expense: line 0 may not supply 'expense_account'."
+      ]
+    },
+    {
+      "id": "tax-01-named-template-with-no-rows-produces-no-tax",
+      "category": "derivation_contract",
+      "principle": "Naming a tax template must apply that template's rates, or the document must be refused. It may not name an 18% template and carry no tax at all.\n",
+      "passed": true,
+      "failures": [],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-03257"
+      ],
+      "notes": []
+    },
+    {
+      "id": "tax-02-forged-zero-rate-row-against-named-template",
+      "category": "derivation_contract",
+      "principle": "A tax row claiming to belong to an 18% template may not carry a 0% rate. Either the row matches the template it names, or the document is refused.\n",
+      "passed": true,
+      "failures": [],
+      "docs": [],
+      "notes": [
+        "refused: bill: header may not supply 'taxes'."
+      ]
+    },
+    {
+      "id": "srv-01-conversion-factor-follows-item-uom-not-caller",
+      "category": "server_derivation",
+      "principle": "The quantity recorded in the stock ledger must follow the item's own UOM conversion, not the caller's assertion of it.\n",
+      "passed": false,
+      "failures": [
+        "line_field: row 0 stock_qty expected 70, got 49.0"
+      ],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-03258 (raw, bypassed the intent layer)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "srv-02-naive-write-must-not-redefine-master-price",
+      "category": "server_derivation",
+      "principle": "A transaction may not silently redefine master data.",
+      "passed": false,
+      "failures": [
+        "item_price: expected exists=False for HL-PRICE-MUTATION-001/Standard Selling, found rate 4321.0"
+      ],
+      "docs": [
+        "Sales Invoice/ACC-SINV-2026-03259 (raw, bypassed the intent layer)"
+      ],
+      "notes": []
     },
     {
       "id": "ret-01-return-cannot-reprice",
@@ -451,7 +580,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Quotation/SAL-QTN-2026-00025"
+        "Quotation/SAL-QTN-2026-00105"
       ],
       "notes": []
     },
@@ -462,7 +591,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00038"
+        "Sales Invoice/ACC-SINV-2026-03260"
       ],
       "notes": []
     },
@@ -473,7 +602,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00039"
+        "Sales Invoice/ACC-SINV-2026-03261"
       ],
       "notes": []
     }

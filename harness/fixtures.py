@@ -284,6 +284,29 @@ def assert_clean_fixtures(client: FrappeClient) -> list[str]:
     return problems
 
 
+def ensure_tax_template(client: FrappeClient) -> None:
+    """An 18% sales tax template, so tax scenarios do not depend on whatever
+    templates a given site happens to ship with."""
+    name = f"HL Sales Tax 18 - {ABBR}"
+    if client.exists("Sales Taxes and Charges Template", name):
+        print(f"  tax:    {name} exists")
+        return
+    accounts = client.call(
+        "frappe.client.get_list", doctype="Account",
+        filters={"company": COMPANY, "is_group": 0, "root_type": "Liability"},
+        fields=["name"], limit_page_length=0) or []
+    if not accounts:
+        print("  tax:    no liability account available, skipped")
+        return
+    client.insert({
+        "doctype": "Sales Taxes and Charges Template",
+        "title": "HL Sales Tax 18", "company": COMPANY,
+        "taxes": [{"charge_type": "On Net Total", "account_head": accounts[0]["name"],
+                   "description": "GST 18", "rate": 18}],
+    })
+    print(f"  tax:    created {name} (18% on net total)")
+
+
 def ensure_all(client: FrappeClient) -> dict:
     print("fixtures:")
     ensure_setup(client)
@@ -291,6 +314,7 @@ def ensure_all(client: FrappeClient) -> dict:
     ensure_customer(client)
     ensure_supplier(client)
     ensure_unpriced_item(client)
+    ensure_tax_template(client)
     ensure_foreign_currency(client)
     ensure_box_uom(client)
     ensure_price_mutation_item(client)

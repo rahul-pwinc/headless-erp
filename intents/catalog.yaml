@@ -66,6 +66,14 @@ defaults:
     - field: expense_account
       evidence: "derivation_map.md finding 6 [live ACC-PINV-2026-00062]"
       reason: "As income_account, on the buying side."
+    - field: taxes
+      evidence: "derivation_map.md finding 2; corpus tax-01/tax-02: naming an 18% template with no rows, or with a forged 0% row, posts no tax at all"
+      reason: >
+        Naming a tax template is a caller decision. The rates that template
+        implies are not. A caller that hand-crafts tax rows can make a document
+        claim a tax treatment it does not carry, and nothing in ERPNext compares
+        the rows against the template they cite. The engine derives them from
+        the named template instead.
   override:
     - field: rate
       evidence: "census: silently_accepted on 8/9; editable on 9/9 child doctypes"

@@ -6,6 +6,12 @@
 Document names (`ACC-SINV-…`, `IOV-…`) come from one particular run and differ
 on each re-run — the values, deltas and behaviour do not.
 
+**It is wired in.** Both write paths produce these records: the library path
+(`harness/intent.py`) and the enforced server-side endpoint
+(`harness/server_scripts/bill_intent.py`). They share one doctype, one hash
+chain, and one canonical encoding. §8 covers the wiring; §10 covers what it
+cost to make the second path work inside RestrictedPython.
+
 ---
 
 ## 1. What was wrong
@@ -52,8 +58,8 @@ foreign key. All three of those turn out to be the problem.
 **Child tables cannot answer the auditor's question.** Every child row is keyed
 by `parent`/`parenttype`. "Show me every override in the period, by field" is
 inherently cross-document; against child tables it is a scan of every voucher in
-the period, and because the overridable set spans nine doctypes (Sales Invoice,
-Sales Order, Delivery Note, Purchase Order, Purchase Receipt, Purchase Invoice,
+the period, and because the contract spans nine doctypes (Sales Invoice, Sales
+Order, Delivery Note, Purchase Order, Purchase Receipt, Purchase Invoice,
 Quotation, Material Request, Payment Entry — `intents/catalog.yaml`), it is nine
 scans and a `UNION`. The question is cross-document, so the storage has to be.
 
@@ -189,6 +195,38 @@ really was zero. The text column `stored_value` stays `NULL` and `drift` says
 
 ---
 
+## 2b. What can produce a record at all
+
+The contract in `intents/catalog.yaml` sorts every field into three buckets, and
+only one of them ever reaches this log.
+
+| Bucket | Fields | Produces a record? |
+|---|---|---|
+| **refuse** | `price_list_rate`, `discount_amount`, `discount_percentage`, `weight_per_unit`, `conversion_rate`, `plc_conversion_rate`, `conversion_factor`, `income_account`, `expense_account` | **No.** The call is rejected before a document exists. |
+| **override** | `rate` | **Yes** — with a reason, one record per row. |
+| **derive** | everything else | No. Callers never send it. |
+
+Nine refused, one overridable. That asymmetry is the design, not an accident of
+implementation: a refused field produces no record because nothing happened —
+there is no document, no ledger entry, and nothing for an auditor to assess. The
+evidence of a refusal is the error the caller received, not a row in a log.
+
+This matters when reading any total below. "Every override in the period" means
+every `rate` override. It does not mean "every attempt to write something the
+system should have derived", and a clean log is not evidence that nobody tried.
+
+The list grew from four fields to nine while this log was being built, and the
+addition that matters most is **`conversion_rate`** — the headline finding of
+the project. Asserting `conversion_rate: 1.0` on a 1,000 USD invoice makes it
+post 1,000 in company currency instead of 94,460, and the books balance
+perfectly at the wrong number. It is refused rather than overridable on purpose:
+a price is a commercial judgment a human can legitimately make, so it gets a
+reason and a record; an exchange rate on a date is a published fact, so there is
+no override case to record. Where there is no defensible reason, the right
+answer is a refusal, not a better audit trail.
+
+---
+
 ## 3. Schema
 
 `Intent Override Log`, module `Custom`, `custom: 1`, `is_submittable: 1`,
@@ -269,10 +307,10 @@ to the general ledger rather than to the caller's intentions — see §2.3.
 | `actor` | Data, required, indexed | caller identity as asserted, e.g. `agent:pricing-bot@1.4` |
 | `actor_kind` | Select | Agent / Human / Unknown |
 | `actor_user` | Link → User | the session ERPNext actually authenticated |
-| `recorded_at` | Datetime, required | when the API call happened, distinct from `target_posting_date` |
+| `recorded_at` | Datetime, required | when the API call happened, distinct from `target_posting_date`. **Site-local**, not UTC — see below. |
 | `seq` | Int, indexed | chain position |
 | `prev_hash`, `record_hash` | Data(64) | SHA-256 chain; `record_hash` is unique |
-| `schema_version` | Int | part of the hashed payload, so the hash format can evolve |
+| `schema_version` | Int | currently 3. Part of the hashed payload, and the encoder `verify_chain` dispatches on — see §6. |
 
 `actor` and `actor_user` are both present because they answer different
 questions. `actor` is what the intent layer says the caller is, and a caller can
@@ -282,6 +320,16 @@ they disagree, that disagreement is itself the finding.
 `recorded_at` and `target_posting_date` are both present for the same reason:
 they diverge on every backdated document, and an auditor wants to be able to ask
 both "what was booked into September" and "what was written on the 8th".
+
+`recorded_at` is written in the **site's** timezone, which on this instance is
+`Asia/Kolkata`. The first version used UTC, which was wrong twice over. Every
+other timestamp in a Frappe database — `creation`, `modified`, a voucher's
+posting time — is site-local, so a UTC `recorded_at` sat 5h30m from the
+`creation` of the very row it was on, and anyone reconciling the two columns
+would conclude the log was written before the document it describes. It also has
+to agree with the enforced server-side path, which has only `frappe.utils.now()`
+and is site-local by construction. Two write paths into one table cannot use two
+clocks.
 
 The `search_index: 1` flags become real indexes — confirmed on the live table:
 
@@ -472,8 +520,37 @@ not a revision.
 plus its predecessor's hash, and re-walks the chain. It reports `tampered`
 (content no longer hashes to the stored value), `broken` (a `prev_hash` that
 does not match its predecessor — what a deletion leaves behind), `forked` (two
-records claiming the same predecessor), and `unsubmitted` (a record left at
-docstatus 0 by a crash between insert and submit).
+records claiming the same predecessor), `unsubmitted` (a record left at
+docstatus 0 by a crash between insert and submit), and `unverifiable_schema`.
+
+That last one is separate from `tampered` on purpose. A record written by a
+schema version this module no longer knows how to reproduce cannot be checked —
+and "I cannot check this" is a different finding from "this was altered". Only
+one of them is an accusation, and a tool whose entire value is that its
+accusations are trustworthy must not make the cheap one.
+
+### The canonical encoding, and why it changed
+
+The hash is taken over a canonical serialisation of the record. Version 2 used
+`json.dumps(sort_keys=True)`. Version 3 uses length prefixes:
+
+```
+iol|v3|<seq>|<prev_hash>|<field>=<len>:<value>|<field>=<len>:<value>|...
+```
+
+The reason is §10: there is a second implementation of this hash, inside a
+Frappe Server Script, running under RestrictedPython with no `json` module and
+no imports. Two implementations of a hash must agree byte for byte or the chain
+reports tampering that never happened — a false accusation, which is the worst
+possible failure for this component. `json.dumps` cannot be hand-rolled safely
+in a sandbox: `ensure_ascii=True` escaping, key sorting, and separator handling
+are three chances to disagree on some reason string containing a quote or an
+accented character. Length prefixes need no escaping at all, and the field order
+is a fixed list rather than a sort.
+
+Both encoders are kept. `verify_chain` dispatches on each record's own stored
+`schema_version`, so v2 records written before the change still verify instead
+of being reported as tampered.
 
 This was tested against the strongest attacker it is meant to catch: raw SQL
 against MariaDB with the site's own credentials, underneath Frappe entirely.
@@ -547,7 +624,10 @@ intent layer is not advice — it is the only door. Verified by
 
 This is a genuine control, and it is stronger than the permlevel approach
 sketched below because the refusal is *loud*: the caller gets an error naming
-the field and the rule, not a `200` and a quietly different document.
+the field and the rule, not a `200` and a quietly different document. And since
+§10, that path writes full `Intent Override Log` records rather than a Comment —
+so for a constrained identity the log is not merely a byproduct of a client
+library it could have declined to use.
 
 **What does not hold.** The boundary binds one identity. It is a property of
 the `Agent Writer` role, not of the Sales Invoice doctype. Anyone holding a
@@ -654,6 +734,15 @@ is the honest conclusion: an ERP cannot certify its own logs.
 - **`actor` is self-asserted.** It is whatever string the caller passed to
   `record_result`. `actor_user` is the authenticated session and cannot be
   forged, so the pair is checkable — but only if someone checks it.
+- **The two write paths share one chain and read the head independently.** A
+  library write and an endpoint write landing in the same instant can both take
+  the same predecessor. `verify_chain` reports that as `forked`; nothing
+  prevents it. It was a theoretical concern with one writer and is a real one
+  with two.
+- **The enforced path cannot withdraw a document whose record failed.** A
+  `frappe.throw` would roll back the audit records written earlier in the same
+  request, so the endpoint reports `audit_error` and leaves the invoice. §10
+  covers what closing that would take.
 - **`drift` detects that the decision was overridden, not by what.** The note
   names the usual suspects (a Pricing Rule, a tax or currency rule, a server
   hook) because the read-back cannot tell them apart: it sees the before and the
@@ -676,60 +765,120 @@ is the honest conclusion: an ERP cannot certify its own logs.
 
 ---
 
-## 8. Integrating with the intent engine
+## 8. How it is wired in
 
-`harness/intent.py` is untouched by this work (another process owns it). The
-integration is one line, at the point where it currently builds the `remarks`
-string — after `insert`/`submit` returns, so the target document exists:
+Not a proposal. Both paths write these records today.
+
+### 8.1 The library path — `harness/intent.py`
+
+The `remarks` hack is gone. In its place:
 
 ```python
-import audit
-...
 saved = self.client.insert(doc)
 if submit and spec["maps_to"].get("submittable"):
     saved = self.client.submit(saved)
-res.name = saved.get("name")
-...
-# AFTER submit, not after insert. record_result re-reads the document, and
-# a read taken before submit misses whatever the submit path changed.
-audit.record_result(self.client, res, actor=caller_identity)
+res.name, res.docstatus = saved.get("name"), saved.get("docstatus")
+
+# After the document is saved and submitted, never before: the record is
+# built by reading the persisted document back, and a read taken before
+# submit would miss whatever the submit path changed.
+self._record_overrides(res)
+self._cite_record(res)
 ```
 
-and the deletion of:
+Four things worth naming:
 
-```python
-if res.overrides:
-    doc["remarks"] = "; ".join(...)   # remove: destroys a real field, records nothing usable
+**`remarks` is left alone.** Not appended to, not templated into — untouched.
+It is a business field that belongs to whoever wrote it, and the previous
+version overwrote it unconditionally. The Desk breadcrumb goes in a `Comment`,
+which is the field Frappe provides for exactly this and which adds rather than
+replaces:
+
+```
+Override recorded in Intent Override Log: IOV-2026-09-00097
 ```
 
-`record_result` is duck-typed on `.doctype`, `.name`, `.intent` and `.overrides`
-(each with `.fieldname`, `.derived_value`, `.reason`, `.row_idx`, and either
-`.requested_value` or the older `.supplied_value`) — the existing `IntentResult`
-and `Override` dataclasses already satisfy it, so no import from `intent.py` is
-needed and no cycle is created. `actor` is the one new thing the engine has to
-supply: the identity of whoever called it, which today it never learns.
+**`IntentResult` carries the record ids.** `res.override_records` is a list of
+`Intent Override Log` names, and each `Override` gains `.record`, `.drift` and
+`.stored_value` after the write — so a caller can cite the record without
+re-querying, and can see that what it asked for is not what the document holds.
+`Override.supplied_value` survives as a property alias for `.requested_value`,
+so existing callers (`prove_intent.py`, `simulate.py`) keep working.
 
-Note what the engine does **not** have to do: nothing about `stored_value` or
-`drift` is the caller's responsibility. `record_result` performs one `GET` of
-the saved document and derives both. That is deliberate — a writer that trusted
-its caller for `stored` would reintroduce the exact defect §2.3 describes.
+**The actor is the calling program, not an invented identity.** With nothing
+passed to `IntentEngine(actor=...)`, the default is `harness:<script name>` —
+`harness:prove_intent.py`, `harness:run_corpus.py`. The audit record separates
+`actor` (asserted, forgeable) from `actor_user` (authenticated, not), and
+inventing a service name for `actor` would put a fiction in the forgeable
+column. Naming the script is the true statement available.
 
-The same discipline is implemented server-side in
-`harness/server_scripts/bill_intent.py`, whose reconcile block compares
-`doc.items[i].rate` against the intended value after `doc.insert()` and flags
-the difference. Two implementations, one rule: **the record comes from the
-document.**
+**An audit failure rolls the document back.** This is the one real judgement
+call in the wiring, so the argument is worth stating.
 
----
+The tempting alternative is to log a warning and return the invoice — the books
+balance either way and the caller got what it asked for. But the entire premise
+of this layer is that an off-list price is *allowed because it is recorded*. An
+override that is not recorded is the exact defect Phase 2 documented, reached by
+a different route: a document priced away from the list with nothing, anywhere,
+saying who decided that or why. Returning it successfully would mean the harness
+produces the artefact it exists to prevent.
+
+So on an audit failure the document is cancelled (or deleted, if it never left
+draft) and the caller gets an `AuditWriteFailed`. A cancelled Sales Invoice
+reverses its own GL entries, so the books are left where they started. Verified
+by injecting an audit outage:
+
+```
+AuditWriteFailed raised:
+    Sales Invoice ACC-SINV-2026-03039 has 1 unrecorded override(s) and was rolled back.
+      audit write failed: RuntimeError: simulated audit outage
+      compensation: ACC-SINV-2026-03039 cancelled (docstatus 2); its GL entries are
+                    reversed and the books are where they started
+   verified live: ACC-SINV-2026-03039 docstatus=2 (2 = cancelled)
+   live GL entries remaining: 0
+   override records for it   : 0
+```
+
+The compensation can itself fail — the network is down, the document is already
+linked. When it does, the exception says `COMPENSATION FAILED` and names the
+document, because that is a state that needs a person rather than a retry.
+
+The breadcrumb `Comment` is deliberately **not** treated this way: if it fails
+it is swallowed, because the authoritative record already exists and is
+immutable. Losing a convenience pointer is not worth cancelling a correct
+invoice over. The difference between the two calls is whether the information
+is stored anywhere else.
+
+### 8.2 The enforced path — `harness/server_scripts/bill_intent.py`
+
+Same doctype, same chain, same `insert`-then-`submit` immutability, written from
+inside the Server Script sandbox. It was a Comment before; it is a real record
+now. See §10 for what that took.
+
+```
+   ok   override with a reason
+        ACC-SINV-2026-03086 list=250.0 requested=1.0 stored=1.0  audit=IOV-2026-09-00104
+```
+
+Neither path trusts its caller for `stored_value` or `drift`. Both derive them
+by reading the persisted document — the library path with one `GET` after
+submit, the endpoint by inspecting `doc.items[i].rate` after `doc.insert()`. A
+writer that took `stored` from its caller would reintroduce the exact defect
+§2.3 describes.
 
 ## 9. Reproducing
 
 ```bash
+# the suites — these now write override records as a side effect of running
+python harness/prove_intent.py                      # the contract,        10/10
+python harness/run_corpus.py                        # the use-case corpus, 39/39
+python harness/prove_boundary.py                    # the enforced path,    8/8
+
+# the audit trail itself
 python harness/demo_audit.py                        # write, drift, query, immutability, chain
 python harness/demo_audit.py --reset                # drop everything first, clean run
 python harness/demo_audit.py --tamper               # + raw-SQL tamper detection
 python harness/demo_audit.py --boundary             # + the permlevel boundary proof
-python harness/prove_boundary.py                    # the enforce.py boundary, 8/8
 ```
 
 The drift section (§2) enables Pricing Rule `PRLE-0001` for exactly one
@@ -743,3 +892,110 @@ destroy this trail with four API calls, and nothing inside ERPNext can stop
 them.
 
 Full row-level output is written to `reports/audit_demo.json`.
+
+---
+
+## 10. The enforced path inside RestrictedPython
+
+The brief expected this half to fail, and to end with a documented Comment
+fallback and a note that fixing it needs a real Frappe app. It did not fail. The
+enforced endpoint writes the same records as the library path. What follows is
+what was measured, because the difference between "impossible" and "possible"
+here was entirely a matter of probing the sandbox instead of assuming.
+
+### What the sandbox actually allows
+
+Probed by installing a temporary Server Script that tried each capability in a
+`try/except` and returned the results, rather than reasoning about
+RestrictedPython's documentation:
+
+| | |
+|---|---|
+| `frappe.session.user` | works |
+| `frappe.utils.now()` | works — site-local, which is why the library path was changed to match |
+| **`frappe.utils.sha256_hash(str)`** | **works** — `hashlib.sha256(s.encode()).hexdigest()`, identical to the library path |
+| `frappe.get_all(..., order_by=..., limit_page_length=...)` | works — so the chain head is readable |
+| `frappe.db.get_value(...)` | works |
+| `frappe.get_doc({...}).insert(ignore_permissions=True)` | works |
+| `.submit()` on that document | works — so records are immutable, not just present |
+| `import hashlib` | **fails**: `__import__ not found` |
+| `frappe.parse_json` | **fails**: `module has no attribute` |
+| `frappe.as_json` | **fails**: `module has no attribute` |
+| `frappe.generate_hash` | **fails**: `module has no attribute` |
+
+`frappe.utils.sha256_hash` is the one that decides it. Without a hash function
+the endpoint could write rows but not join the chain, and an unchained record in
+a chained log is worse than no record — it looks verified and is not.
+
+### What it cost
+
+One design change, described in §6: the canonical encoding moved from
+`json.dumps` to length prefixes so that two implementations — one in ordinary
+Python, one in a sandbox with no `json` — can produce identical bytes without
+either of them hand-rolling JSON escaping.
+
+Three smaller things the sandbox forced:
+
+- **`int(doc.docstatus)`.** `docstatus` is an `IntEnum` in Frappe 16, and
+  `str()` of an enum is not `str()` of an int. Left alone it would have hashed a
+  different string on the two sides and reported permanent, phantom tampering.
+- **`str(doc.posting_date)`.** A `datetime.date` on the server side, a string
+  over REST. They stringify the same, but only if you say so.
+- **A hand-written absolute value.** `abs()` is fine, but the half-cent drift
+  tolerance is written out as a comparison so the arithmetic is visibly the same
+  on both sides.
+
+### Proof that the two implementations agree
+
+The test is not that the endpoint wrote a row. It is that the library-side
+verifier, running the library-side encoder, reproduces the hash the sandbox
+computed:
+
+```
+record              : IOV-2026-09-00103   (written inside RestrictedPython)
+stored hash         : 9c57335f1c342099bf554a8945a516aa6240cd627282f6afa4b87f45aaee7975
+audit.py recomputes : 9c57335f1c342099bf554a8945a516aa6240cd627282f6afa4b87f45aaee7975
+MATCH               : True
+docstatus           : 1  (submitted, immutable)
+```
+
+and that `verify_chain` is clean across a chain interleaving records from both
+writers:
+
+```
+verify_chain across BOTH write paths:
+  {'records': 17, 'tampered': 0, 'broken': 0, 'forked': 0,
+   'unsubmitted': 0, 'unverifiable_schema': 0, 'ok': True}
+```
+
+Drift detection works there too. With Pricing Rule `PRLE-0001` enabled, through
+the constrained agent identity and the enforced endpoint:
+
+```
+  invoice ACC-SINV-2026-03109  derived=250.0 requested=1.0 STORED=225.0
+  drift=changed  drift_detected=1  audit=['IOV-2026-09-00107']  audit_error=None
+```
+
+### Where the enforced path is still weaker
+
+Not in the record — those are identical. In the failure handling.
+
+The library path cancels the document when the audit write fails (§8.1). The
+endpoint **cannot**, and this is a property of Frappe's request handling rather
+than an oversight: a `frappe.throw` rolls back the entire request transaction,
+including any override records already written earlier in the same loop. So on
+an audit failure the endpoint returns the invoice with `audit_error` populated
+and the failing line carrying its own `audit_error`. Loud, not silent — but the
+document survives, where the library path would have withdrawn it.
+
+Closing that gap needs the document insert and the audit write in one
+transaction with a savepoint the script controls, which is exactly the kind of
+thing a Server Script is not allowed to do. That is the remaining argument for
+packaging this as a real Frappe app: not the record format, which works, but
+transactional control over the two writes.
+
+A second, smaller asymmetry: the endpoint writes records against a **draft**
+invoice (`doc.insert()`, no submit), so `target_docstatus` is 0 and queries
+report `target_state: draft`. The library path records against submitted
+documents. Both are accurate about what they saw; they are just not the same
+moment in the lifecycle.

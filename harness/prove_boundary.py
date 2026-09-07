@@ -62,7 +62,11 @@ def main() -> int:
             ok = not expect_block
             print(f"   {'ok  ' if ok else 'FAIL'} {label}")
             print(f"        {m['name']} list={l['derived']} requested={l['intended']} stored={l['stored']}"
-                  + (f"  DRIFT: {l['drift']}" if l.get("drift") else ""))
+                  # `drift` is now always present on the response ("none" /
+                  # "changed"), so test the value, not the key: the old
+                  # truthiness check printed "DRIFT: none" on every clean line.
+                  + (f"  DRIFT: {l['drift']}" if l.get("drift") not in (None, "none") else "")
+                  + (f"  audit={l['audit_record']}" if l.get("audit_record") else ""))
         else:
             ok = expect_block
             print(f"   {'ok  ' if ok else 'FAIL'} {label}\n        refused: {srv_msg(rr.json())[:100]}")

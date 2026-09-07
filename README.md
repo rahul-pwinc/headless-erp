@@ -62,6 +62,42 @@ That consistency is the actual problem:
 
 The failure mode for agent-driven ERP is therefore not corruption. It is **laundering**: the system converts a machine's missing context into a record that looks like human judgment, and the audit trail actively conceals the difference. Catching it needs a differential oracle — run the same intent down both paths and diff — not an invariant checker.
 
+## Phase 2 — the census
+
+The single-field finding generalises. `harness/run_census.py` asks the server what it *would* derive for an item row, then supplies a different value for each derived field and reads back what was stored. Nine transaction doctypes, no browser.
+
+```
+probes run          : 196
+  protected         : 144
+  silently accepted :  42
+  rejected          :  10
+
+silently accepted   : 6 distinct fields
+  rate, price_list_rate, discount_amount, discount_percentage,
+  weight_per_unit, min_order_qty
+```
+
+**144 of 196 probes were protected.** ERPNext recomputes `amount`, `net_rate`, `base_rate`, `stock_qty`, `conversion_factor` and 16 other fields regardless of what the caller sends. This is not a system with no defences. The gap is specific and small, which is what makes it worth naming.
+
+### The part the UI cannot do
+
+Cross-referencing the six accepted fields against `read_only` in the child DocType JSON:
+
+| field | read-only in Desk UI | accepted over API |
+|---|---|---|
+| `price_list_rate` | **5 of 9** child doctypes | yes |
+| `weight_per_unit` | **4 of 8** child doctypes | yes |
+| `min_order_qty` | **1 of 1** (Material Request) | yes |
+| `rate` | 0 of 9 | yes |
+| `discount_amount` | 0 of 8 | yes |
+| `discount_percentage` | 0 of 8 | yes |
+
+`price_list_rate` is rendered read-only on Sales Invoice, Sales Order, Quotation, Delivery Note and Material Request. **A human cannot type into it.** The API accepts it.
+
+That matters more than the `rate` case. `price_list_rate` is the *reference* price against which `discount_amount` is computed. Forge it and the discount is measured against a baseline that never existed — the audit trail's own reference point is fabricated, so the override cannot be detected even in principle by comparing rate to list.
+
+The `rate` case is laundering: a machine's missing context becomes a record that reads like human judgment. The `price_list_rate` case is stronger: it produces a document no Desk session could have created.
+
 ## The control matters
 
 The harness runs two modes, and the contrast is what makes the finding falsifiable:

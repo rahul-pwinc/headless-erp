@@ -15,6 +15,9 @@ ITEM_CODE = "HL-WIDGET-001"
 ITEM_GROUP = "Products"
 LIST_PRICE = 250.0          # the Price List rate the UI would derive
 CUSTOMER = "Headless Test Customer"
+SUPPLIER = "Headless Test Supplier"
+BUY_PRICE_LIST = "Standard Buying"
+BUY_PRICE = 120.0
 
 
 def ensure_setup(client: FrappeClient) -> None:
@@ -95,11 +98,28 @@ def ensure_customer(client: FrappeClient) -> None:
     print(f"  customer: created {CUSTOMER}")
 
 
+def ensure_supplier(client: FrappeClient) -> None:
+    if not client.exists("Supplier", SUPPLIER):
+        client.insert({"doctype": "Supplier", "supplier_name": SUPPLIER,
+                       "supplier_group": "All Supplier Groups"})
+        print(f"  supplier: created {SUPPLIER}")
+    else:
+        print(f"  supplier: {SUPPLIER} exists")
+    existing = client.call("frappe.client.get_list", doctype="Item Price",
+                           filters={"item_code": ITEM_CODE, "price_list": BUY_PRICE_LIST},
+                           fields=["name"], limit_page_length=0) or []
+    if not existing:
+        client.insert({"doctype": "Item Price", "item_code": ITEM_CODE,
+                       "price_list": BUY_PRICE_LIST, "price_list_rate": BUY_PRICE})
+        print(f"  price:  {BUY_PRICE_LIST} = {BUY_PRICE} (created)")
+
+
 def ensure_all(client: FrappeClient) -> dict:
     print("fixtures:")
     ensure_setup(client)
     ensure_item(client)
     ensure_customer(client)
+    ensure_supplier(client)
     company = (
         client.call("frappe.client.get_list", doctype="Company", fields=["name"], limit_page_length=0)
         or [{"name": COMPANY}]
@@ -110,4 +130,6 @@ def ensure_all(client: FrappeClient) -> dict:
         "customer": CUSTOMER,
         "price_list": PRICE_LIST,
         "list_price": LIST_PRICE,
+        "supplier": SUPPLIER,
+        "buy_price_list": BUY_PRICE_LIST,
     }

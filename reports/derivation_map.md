@@ -17,7 +17,7 @@ through both.
 
 | Thing | Version | Where I read it |
 |---|---|---|
-| ERPNext | **16.34.1** | source extracted from the running container `headless-erp-backend-1` (`/home/frappe/frappe-bench/apps/erpnext`). Line numbers match `git show v16.34.1:<path>` in `vendor/erpnext`. |
+| ERPNext | **16.34.1** | source extracted from the running container `headless-erp-backend-1` (`/home/frappe/frappe-bench/apps/erpnext`). I `diff`ed the five files I cite most against `git show v16.34.1:<path>` in `vendor/erpnext` — `accounts_controller.py`, `get_item_details.py`, `taxes_and_totals.py`, `selling_controller.py`, `pricing_rule.py` — all **byte-identical**. ERPNext line numbers below are therefore exact v16.34.1 tag content. |
 | Frappe | **16.33.0** | same container. **Line numbers do NOT match `vendor/frappe`**, which is checked out on `develop` (v17-dev) with no tags fetched. All `frappe/...` citations below are v16.33.0 container line numbers. |
 | Live instance | erpnext 16.34.1 / frappe 16.33.0 | `http://localhost:8080`, company `Headless Test Co` (INR), verified via `Installed Applications`. |
 
@@ -74,7 +74,7 @@ fields_to_fetch = [
 ```
 
 1. `self.flags.ignore_links` or `_action == "cancel"` → whole pass skipped (`document.py:1209`). Not reachable over `/api/resource`.
-2. **The link field must be populated.** `base_document.py:1061-1062` `continue`s on an empty link, so a caller that supplies the derived field *and omits the link* keeps its value.
+2. **The link field must be populated.** `base_document.py:1001-1003` `continue`s on an empty link, so a caller that supplies the derived field *and omits the link* keeps its value.
 3. **`fetch_if_empty: 1` → the caller wins.** This is the hole.
 
 Also note the ordering: `_validate_links` runs *before* `run_before_save_methods` on both insert
@@ -154,7 +154,7 @@ in the repo README. Two additions from this audit:
   document's own `taxes` table. So `item_tax_rate` is class (a) — but derived from a table that is
   itself class (b). **[live]** confirmed: sent `{"Sales Expenses - HTC": 0}`, stored
   `{"Sales Expenses - HTC": 18}` (`ACC-SINV-2026-02280`) — corrected to match the caller's own tax row.
-- `:1153-1157` — `cost_center` and `conversion_factor` get an extra `and not item.get(fieldname)`
+- `:1143-1145` — `cost_center` and `conversion_factor` get an extra `and not item.get(fieldname)`
   branch, i.e. explicitly "only if empty".
 
 ---
@@ -168,10 +168,10 @@ This is the class the reviewer's nuance identified, and it is larger than the on
 | C1 | **`ctx` is refilled from `out` only where `ctx` is `None`** — so everything downstream of line 178 (pricing rules, gross profit) sees the **caller's** numbers, not the derived ones. This is the mechanism behind C2. | `get_item_details.py:175-178` | (c) |
 | C2 | **Pricing-rule discount is computed against `args.price_list_rate`** — i.e. the caller's. `value = args.price_list_rate * (pct/100)`; `discount_percentage = discount_amount / args.price_list_rate * 100`. | `pricing_rule.py:614`, `:619`, `:626-628` | (c) |
 | C3 | `weight_per_unit`, `weight_uom` — in `force_item_fields`, value is `ctx.X or item.get("X")`. | `get_item_details.py:592-593` | (c) |
-| C4 | `conversion_factor` — `ctx.conversion_factor or get_conversion_factor(...)`. Only reached when `uom != stock_uom`; when they are equal, `:610` hard-sets `1.0` (genuinely protected). | `get_item_details.py:608-614` | (c) conditional |
+| C4 | `conversion_factor` — `ctx.conversion_factor or get_conversion_factor(...)`. Only reached when `uom != stock_uom`; when they are equal, `:609-610` hard-sets `1.0` (genuinely protected). | `get_item_details.py:609-614` | (c) conditional |
 | C5 | `discount_amount` — `flt(ctx.discount_amount) or 0.0`. The "derived" discount is the caller's. | `get_item_details.py:582` | (c) |
 | C6 | `get_default_inventory_account` reads `ctx.inventory_account` **first**, ahead of the Item Default. | `get_item_details.py:994-999` | (c) |
-| C7 | `get_default_income_account` / `get_default_expense_account` fall back to `ctx.income_account` / `ctx.expense_account` when no Item/Group/Brand default exists. | `get_item_details.py:981-987`, `:1002` | (c) fallback |
+| C7 | Five account resolvers fall back to the caller's own `ctx` value when no Item/Group/Brand default exists: `income_account` (`:986`), `expense_account` (`:1020`), `provisional_account` (`:1029`), `discount_account` (`:1037`), deferred accounts (`:1050`). | `get_item_details.py:981-1053` | (c) fallback |
 | C8 | `get_default_cost_center` falls back to `ctx.cost_center`. Company mismatch *is* checked (`:1098`). | `get_item_details.py:1095-1096` | (c) fallback |
 | C9 | `get_item_warehouse_` with `overwrite_warehouse=False` (which is what `accounts_controller.py:1123` passes) returns `ctx.warehouse` unchanged. | `get_item_details.py:699-709` | (c) |
 | C10 | Material Request: `out.rate = ctx.rate or out.price_list_rate`. | `get_item_details.py:198` | (c) |
@@ -242,7 +242,7 @@ document's ledger amount, and `conversion_rate` is not a field a salesperson wou
 
 **Payment Entry has the same shape**: `source_exchange_rate` / `target_exchange_rate` are set only
 `if not self.<field>` (`payment_entry.py:634-656`) and validated only as non-zero
-(`:659-662`). **[code]** — not tested live.
+(`:658-661`). **[code]** — not tested live.
 
 ### 4.2 Tax templates and tax rows — class (b)
 
@@ -282,7 +282,7 @@ state of this instance; with it set to `1` the template rows would be appended w
 
 ### 4.3 Item Default resolution — accounts, cost centre, warehouse — class (b)/(c)
 
-`get_basic_details` (`get_item_details.py:551-560`) derives `income_account`, `expense_account`,
+`get_basic_details` (`get_item_details.py:546-565`) derives `income_account`, `expense_account`,
 `discount_account`, `provisional_expense_account`, `cost_center`, `warehouse` from
 Item Default → Item Group Default → Brand Default → Company. None are in `force_item_fields`,
 so `accounts_controller.py:1127` will not overwrite a caller value.
@@ -318,17 +318,17 @@ a forged `address_display` should survive. I did not construct that case. **[nee
 
 ### 4.6 Payment Entry — mixed
 
-- `party_name` — unconditional `frappe.db.get_value` (`payment_entry.py:542-545`). Class (a).
+- `party_name` — unconditional `frappe.db.get_value` (`payment_entry.py:541-545`). Class (a).
   **[live]** `ACC-PAY-2026-00033`: sent `FORGED PARTY NAME`, stored `Headless Test Customer`.
 - `party_account`, `paid_from_account_currency`, `paid_to_account_type` — all `if not self.<field>`
-  (`payment_entry.py:555-568`). Class (b). **[code]**
+  (`payment_entry.py:555-567`). Class (b). **[code]**
 - `source_exchange_rate` / `target_exchange_rate` — class (b), see 4.1.
 
 ### 4.7 Stock valuation — class (a), the genuine counter-example
 
 `selling_controller.py:492` `set_incoming_rate` recomputes `incoming_rate` when
 `(not d.incoming_rate or self.is_new())` — i.e. **unconditionally on a new document**
-(`selling_controller.py:563-567`). `buying_controller.py:418` `update_valuation_rate` likewise
+(`selling_controller.py:567-570`). `buying_controller.py:418` `update_valuation_rate` likewise
 recomputes `valuation_rate` from the document's own charges, and `valuation_rate` is in
 `force_item_fields`. Stock costing is defended in a way pricing is not. **[code]** — the fixture
 item is non-stock, so I did not exercise this live.
@@ -424,7 +424,7 @@ Stated so nothing here is read as more than it is.
 
 ---
 
-## 7. Reproduction
+## 7. Reproduction, and the state of the instance
 
 ```bash
 cd /Users/rahul/programs/headless-erp
@@ -436,8 +436,44 @@ Scratchpad: `/private/tmp/claude-501/-Users-rahul-programs/846c0b60-e4de-4448-b7
 (`probe*.py`, `probe*_results.json`, `fetch_census.txt`, and `live/` — the exact source extracted
 from the running container).
 
-The probes are not idempotent: they create Sales Invoices, Sales Orders, a Pricing Rule
-(`PRLE-0001`), a Sales Taxes and Charges Template, a Sales Partner, a Sales Person, an Address, a
-`Currency Exchange USD→INR = 87`, a `Box` UOM row on `HL-WIDGET-001`, and — via C12 — an `Item Price`
-for `HL-UNPRICED-001`. Two runs hit transient MariaDB `SAVEPOINT` / `tabSeries` deadlock errors that
-succeeded on retry; those are load artefacts, not findings.
+### These probes mutate master data. That is unavoidable and it is a hazard.
+
+Several findings here can only be shown by changing a master and then observing that the server
+declines to use it — C2 needs a Pricing Rule, C12 needs an unpriced item, §4.1 needs a
+`Currency Exchange` row. **A probe run therefore leaves the instance deriving different values than
+it did before, which silently changes the answers other tests get.** Two of the masters below were
+live long enough to affect concurrent work in this session.
+
+Created by these probes, and their disposition as of this writing:
+
+| master | side effect while live | disposition |
+|---|---|---|
+| Pricing Rule `PRLE-0001` ("HL PR 10pct", 10% off `HL-WIDGET-001`) | **applied to every** Sales Invoice / Order for that item — 250 → 225 | **could not delete** (probe documents link it); set `disable = 1` |
+| `Currency Exchange` `USD→INR = 87` | changed FX derivation for every multi-currency document | **deleted** |
+| Address `HL Real Addr …-Billing` | became the customer's default billing address, auto-filling `customer_address` on every invoice | **could not delete** (`LinkExistsError`); set `disabled = 1` |
+| `Box` UOM row (`conversion_factor 10`) on `HL-WIDGET-001` | changed `stock_qty` derivation for that shared fixture item | **row removed** |
+| `Item Price` 7777 on `HL-UNPRICED-001` | destroyed the "deliberately unpriced" property of the fixture | removed by the team lead before I got to it |
+| Sales Taxes and Charges Template `HL Sales Tax 18 - HTC` (`is_default = 0`) | none — only applies when a caller names it | left in place |
+| Sales Partner `HL Partner`, Sales Person `HL Person` | none — only apply when a caller names them | left in place |
+
+The Pricing Rule and Address could not be removed because the very documents cited as evidence in
+this report link them; deleting those documents would destroy the evidence trail. Disabling stops
+the derivation side effect, which is what matters, but **`PRLE-0001` and that Address still exist
+and would come back if re-enabled.**
+
+**Post-cleanup control** — `ACC-SINV-2026-02894`, plain insert, no overrides:
+`price_list_rate 250.0`, `rate 250.0`, `discount_amount 0.0`, `pricing_rules None`,
+`grand_total 1000.0`, `customer_address None`, `conversion_rate 1.0`, item UOMs `[('Nos', 1.0)]`,
+zero `Item Price` rows on `HL-UNPRICED-001`, zero `Currency Exchange` rows.
+That matches the README's baseline, so the instance is back to where it started.
+
+**If you re-run the probes, they will recreate all of the above.** Anything added in future should
+carry a `PROBE-` prefix rather than `HL-`, so probe artefacts are distinguishable from the repo's own
+`HL-` fixtures — the two are currently indistinguishable by name, which is how `PRLE-0001` went
+unnoticed.
+
+Not touched, by instruction: role `Agent Writer` and user `agent@headless.test` (both confirmed
+present and unmodified).
+
+Two runs hit transient MariaDB `SAVEPOINT` / `tabSeries` deadlock errors that succeeded on retry;
+those are load artefacts, not findings.

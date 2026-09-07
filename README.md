@@ -62,6 +62,39 @@ That is a narrower claim than the one this repo opened with. It is also the only
 
 **On novelty, plainly:** a caller-supplied rate winning over the price list is documented, intended ERPNext behaviour, not a bug. And "the API does not enforce field-level `read_only`" is a general property of Frappe, true of every read-only field on every doctype, not something specific to ERPNext or to pricing. Neither is a discovery. What is worth naming is the *consequence*: the class of ERP field where the server holds a correct value, the caller may overwrite it, and the resulting record is downstream-indistinguishable from a deliberate human decision.
 
+## The headline finding is not price. It is the exchange rate.
+
+`reports/derivation_map.md` extends the census past `get_item_details` to every server-side derivation primitive in ERPNext v16.34.1. Eight findings, each with a live document id. The one that matters most:
+
+**`conversion_rate` is accepted verbatim.**
+
+```
+caller OMITS conversion_rate   -> server derives 94.46  -> base_grand_total  94,460
+caller ASSERTS conversion_rate: 1.0 -> stored 1.0       -> base_grand_total   1,000
+                                                           GL posts 1,000, BALANCED
+```
+
+A 1,000 USD invoice posts 1,000 in company currency instead of 94,460. The server holds a `Currency Exchange` record and demonstrably uses it when the field is omitted. Supply the field and it does not.
+
+**This one does not have the price finding's weakness.** The argument against detecting a bad price collapsed to "6 to 9 percent of legitimate lines are off-reference anyway". There is no equivalent defence here. An exchange rate on a given date is a published fact, not a commercial judgment. No business legitimately books a USD invoice at 1.0. So for this field, post-hoc detection is both **clean** and **cheap** — and the error is two orders of magnitude rather than a discount.
+
+### The rest, verified live
+
+| # | finding | class |
+|---|---|---|
+| 1 | `conversion_rate` accepted verbatim, 94x understatement | silently accepted |
+| 2 | naming a tax template without rows produces an invoice with **no tax** | silently accepted |
+| 3 | pricing rules compute their discount off the **caller's own** `price_list_rate`, and the row still cites the rule | circular |
+| 4 | `fetch_from` **is** enforced server-side, but `fetch_if_empty` opts out on **75 of 367** fetch-fields, 19 of them read-only in the UI. `Sales Team.commission_rate` took 75% against a 2% master | mostly enforced |
+| 5 | with `auto_insert_price_list_rate_if_missing = 1` (default on this instance) a caller's invented rate **becomes the master Price List entry**, so the next honest caller derives the forged number | circular, and it persists |
+| 6 | item `income_account` / `expense_account` / cost centre are caller-supplied. An invoice can be booked to Interest Income | silently accepted |
+| 7 | `conversion_factor` is circular when `uom != stock_uom`: master says Box = 10, caller sent 7, `stock_qty` became 28 instead of 40. **This moves the stock ledger, not only money** | circular |
+| 8 | `weight_per_unit` is in `force_item_fields` and is still the caller's number | circular |
+
+Finding 5 is the one to sit with. Every other item here produces one wrong document. That one **writes the forged value into master data**, so a single bad call permanently changes what "correct" means for everyone who comes after. It is also how this repo accidentally contaminated its own unpriced fixture during testing, which we mistook for operator error until we read the code.
+
+Finding 4 corrects an assumption this project started with: `fetch_from` was suspected of being form-only, in which case the gap would have been enormous. It is not. `BaseDocument` assigns fetched values on insert and save with no "if empty" guard (`frappe/model/base_document.py:1027-1099`). The exposure is the documented `fetch_if_empty` opt-out, which is narrower and countable.
+
 ## Phase 2 — the census
 
 The single-field finding generalises. `harness/run_census.py` asks the server what it *would* derive for an item row, then supplies a different value for each derived field and reads back what was stored. Nine transaction doctypes, no browser.

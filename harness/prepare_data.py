@@ -47,10 +47,27 @@ Steps, in order:
                                         item?" It is computed only over
                                         lines that have a Customer ID.
 
-                 Both are reported side by side, undoctored. This script
-                 does not decide which is "correct" — that is a judgment
-                 call about what "list price" should mean, and the reader
-                 should see both.
+                 Two further cuts of the per-customer view are reported
+                 alongside it, because a (SKU, customer) pair bought only
+                 once is trivially "at reference" (with one sample, the
+                 mode IS that sale):
+
+                 per_customer_reference_excl_single_purchase — the same
+                                        per-customer definition, excluding
+                                        pairs bought exactly once, so it
+                                        isolates cases where the
+                                        customer's usual price is actually
+                                        established by repetition.
+
+                 per_customer_reference_min6_purchases — restricted
+                                        further, to pairs with at least 6
+                                        purchases: an established,
+                                        well-sampled buying pattern.
+
+                 All four are reported side by side, undoctored. This
+                 script does not decide which is "correct" — that is a
+                 judgment call about what "list price" should mean, and
+                 the reader should see all of them.
 
 Usage:
     ./.venv/bin/python harness/prepare_data.py
@@ -198,21 +215,36 @@ def clean_and_analyse(df: pd.DataFrame) -> dict:
         m = s.mode()
         return float(m.iloc[0]) if len(m) else float("nan")
 
-    modal_price = with_customer.groupby(["StockCode", "CustomerID"]).Price.agg(_mode_price)
-    with_customer["ModalPrice"] = with_customer.set_index(["StockCode", "CustomerID"]).index.map(modal_price)
+    pair = with_customer.groupby(["StockCode", "CustomerID"]).Price
+    modal_price = pair.agg(_mode_price)
+    pair_size = pair.size()
+    pair_index = with_customer.set_index(["StockCode", "CustomerID"]).index
+    with_customer["ModalPrice"] = pair_index.map(modal_price)
+    with_customer["PairPurchases"] = pair_index.map(pair_size)
 
-    cust_diff = with_customer.Price - with_customer.ModalPrice
-    cust_at = int((cust_diff.abs() < TOL).sum())
-    cust_off_mask = cust_diff.abs() >= TOL
-    cust_off = int(cust_off_mask.sum())
-    cust_lines = len(with_customer)
-    cust_off_pct = cust_off / cust_lines * 100 if cust_lines else float("nan")
+    def _reference_stats(d: pd.DataFrame, ref_col: str) -> dict:
+        """at/off counts and revenue share of lines vs. a per-line reference price."""
+        diff = d.Price - d[ref_col]
+        at = int((diff.abs() < TOL).sum())
+        off_mask = diff.abs() >= TOL
+        off = int(off_mask.sum())
+        n = len(d)
+        revenue_total = float((d.Price * d.Quantity).sum())
+        revenue_off = float((d.loc[off_mask, "Price"] * d.loc[off_mask, "Quantity"]).sum())
+        return {
+            "lines": n,
+            "at_reference": at,
+            "off_reference": off,
+            "off_list_pct": off / n * 100 if n else float("nan"),
+            "off_list_revenue_pct": revenue_off / revenue_total * 100 if revenue_total else float("nan"),
+        }
 
-    cust_revenue_total = float((with_customer.Price * with_customer.Quantity).sum())
-    cust_revenue_off = float(
-        (with_customer.loc[cust_off_mask, "Price"] * with_customer.loc[cust_off_mask, "Quantity"]).sum()
-    )
-    cust_off_revenue_pct = cust_revenue_off / cust_revenue_total * 100 if cust_revenue_total else float("nan")
+    # A pair bought only once is trivially "at reference": with one sample,
+    # the mode IS that sale, so it can never register as off-list. Reported
+    # separately so that fact is visible rather than diluting the other cuts.
+    single_purchase = with_customer[with_customer.PairPurchases == 1]
+    repeat_purchase = with_customer[with_customer.PairPurchases >= 2]
+    established_pattern = with_customer[with_customer.PairPurchases >= 6]
 
     per_customer_reference = {
         "description": (
@@ -224,12 +256,33 @@ def clean_and_analyse(df: pd.DataFrame) -> dict:
             "pooled-median definition is. Computed only over lines that "
             "carry a Customer ID."
         ),
-        "lines_with_customer_id": cust_lines,
+        "lines_with_customer_id": len(with_customer),
         "lines_excluded_no_customer_id": lines_excluded_no_customer_id,
-        "at_reference": cust_at,
-        "off_reference": cust_off,
-        "off_list_pct": cust_off_pct,
-        "off_list_revenue_pct": cust_off_revenue_pct,
+        **_reference_stats(with_customer, "ModalPrice"),
+    }
+
+    per_customer_reference_excl_single_purchase = {
+        "description": (
+            "Same as per_customer_reference, but excludes (StockCode, "
+            "CustomerID) pairs bought only once: with a single sample the "
+            "mode is that sale, so it is trivially 'at reference' and "
+            "cannot show a deviation. This isolates cases where the "
+            "customer's usual price is actually established by repetition."
+        ),
+        "single_purchase_pairs_pct_of_customer_lines": (
+            len(single_purchase) / len(with_customer) * 100 if len(with_customer) else float("nan")
+        ),
+        **_reference_stats(repeat_purchase, "ModalPrice"),
+    }
+
+    per_customer_reference_min6_purchases = {
+        "description": (
+            "Same reference (each customer's own modal price for the SKU), "
+            "restricted to (StockCode, CustomerID) pairs with at least 6 "
+            "purchases -- an established, well-sampled buying pattern, not "
+            "just 'not a one-off'."
+        ),
+        **_reference_stats(established_pattern, "ModalPrice"),
     }
 
     report = {
@@ -253,6 +306,8 @@ def clean_and_analyse(df: pd.DataFrame) -> dict:
         ),
         "median_reference": median_reference,
         "per_customer_reference": per_customer_reference,
+        "per_customer_reference_excl_single_purchase": per_customer_reference_excl_single_purchase,
+        "per_customer_reference_min6_purchases": per_customer_reference_min6_purchases,
     }
     return report
 
@@ -287,6 +342,12 @@ def main() -> int:
     print(f"  OFF LIST (per-cust ref) : {pc['off_list_pct']:.1f}%  "
           f"(revenue {pc['off_list_revenue_pct']:.1f}%)  "
           f"[{pc['lines_with_customer_id']:,} lines with a Customer ID]")
+    pcx = report["per_customer_reference_excl_single_purchase"]
+    print(f"    excl. single-purchase pairs ({pcx['single_purchase_pairs_pct_of_customer_lines']:.1f}% "
+          f"of those lines) : {pcx['off_list_pct']:.1f}%  (revenue {pcx['off_list_revenue_pct']:.1f}%)")
+    pc6 = report["per_customer_reference_min6_purchases"]
+    print(f"    pairs with 6+ purchases only            : {pc6['off_list_pct']:.1f}%  "
+          f"(revenue {pc6['off_list_revenue_pct']:.1f}%)  [{pc6['lines']:,} lines]")
     print(f"  SKUs multi-price        : {report['skus_multi_price_pct']:.1f}%")
     print(f"  noise lines stripped    : {report['noise_lines_stripped']:,}")
     print(f"  implausible dropped     : {report['implausible_dropped']:,}")

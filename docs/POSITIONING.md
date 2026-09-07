@@ -18,54 +18,92 @@ result without distinguishing them.
 This project makes the distinction explicit and enforces it at the moment of
 writing:
 
-- **derive**: the caller does not send the field. The engine asks the server for
-  the value first (`harness/intent.py:210-214`) and writes what it gets back.
+- **derive**: the caller does not send the field. The server is asked for the
+  value first and what it returns is written.
 - **override**: the caller may send a different value, but only as a declared
-  override carrying a reason string, and only after the derived value has been
-  computed and recorded alongside it (`harness/intent.py:190-202`, `:242-245`).
-- **refuse**: the caller may not send the field at all
-  (`harness/intent.py:179-187`).
+  override carrying a reason, and only after the derived value has been computed
+  and recorded alongside it.
+- **refuse**: the caller may not send the field at all.
+
+There are two implementations of that contract in the repo, and the difference
+between them is the difference between advice and a control:
+
+| | `harness/intent.py` | `harness/server_scripts/bill_intent.py` |
+|---|---|---|
+| Runs | in the caller's process | server-side, as a Frappe Server Script |
+| Binds | callers that choose to import it | the identity, whatever it calls |
+| Bypassed by | `POST /api/resource` | nothing, for a constrained role |
+| Coverage | all 11 intents | `bill` only |
+
+`harness/enforce.py` provisions the boundary that makes the second one real: a
+role with no write permission on any transaction doctype, read-only access to
+the master data an agent legitimately needs, and the `bill_intent` endpoint as
+the only way in. `reports/boundary.json` records 8 of 8 checks passing,
+including the two that matter: `Administrator` posting `rate: 1.0` straight to
+`/api/resource/Sales Invoice` is allowed, and the constrained identity doing the
+same gets 403.
 
 The assignment of each field to one of the three buckets is stated in
 `intents/catalog.yaml` and is derived from an empirical census of what the
 server actually accepts (`reports/census.json`) crossed with whether the Desk UI
 lets a human type into the field.
 
-That is the whole product. It is roughly 320 lines of engine plus a declarative
-catalog. The value is not in the code, it is in the claim that the catalog is
-correct, which is why [CLAIMS.md](CLAIMS.md) exists.
+The value is not in the code, which is small. It is in the claim that the
+catalog is correct, which is why [CLAIMS.md](CLAIMS.md) exists.
 
 ## What this is not
 
-**It is not an anomaly detector, a scanner, or an audit tool that finds bad
-rows.** That approach cannot work, and the strongest evidence in this repo is
-the evidence against it.
+**It is not an anomaly detector or a scanner.** Not because detection is
+impossible, which was an earlier claim of this project and is retracted, but
+because detection answers a different question than the one the buyer has.
 
-`reports/dataset_analysis.json` analyses 1,033,527 real line items from a UK
-wholesaler (UCI Online Retail II). Taking the per-SKU median price as the list
-price, 31.4% of lines do not transact at list, and those lines carry 50.8% of
-gross revenue. 88.4% of SKUs sold at more than one price.
+### How often does real commerce price off reference
 
-That number is partly an artefact of the method, and the artefact matters more
-than the headline. A median is a statistic, not a price list. A wholesaler with
-a trade price and a retail price for the same SKU will show close to half its
-lines away from the median by construction, and ERPNext models exactly that case
-properly through `Customer.default_price_list`,
-`Customer Group.default_price_list`, and Pricing Rule scoped by
-`customer_group`. So the 31.4% is best read not as "a third of this company's
-sales were off-list" but as "a third of its lines fall outside any single
-reference price, and a naive reconstruction of the reference price cannot tell
-you which of those were legitimate."
+`reports/dataset_analysis.json` and `data/sales_clean.csv` cover 1,033,527 real
+line items from a UK wholesaler (UCI Online Retail II). The off-reference rate
+depends entirely on what you call the reference price:
 
-Both readings support the same conclusion, and it is the conclusion this product
-is built on: **you cannot separate a legitimate off-list price from an agent
-that never looked up the price, by looking at the finished record.** There is no
-threshold, no distribution, and no model that does it, because the two
-populations are the same shape. The information that separates them (did anyone
-make a decision here) is destroyed at write time and never recorded.
+| reference for "list price" | off-reference | what makes the number wrong |
+|---|---|---|
+| per-SKU median, pooled across all customers | 31.4% | This seller is bimodal (wholesale and retail). A single median puts roughly half the lines of a two-price SKU off reference by construction. |
+| per-customer modal price for that SKU | 3.4% | 42.9% of lines are the only time that customer bought that SKU, so they are trivially at reference. |
+| per-customer modal, pairs bought 2+ times | 6.0% | The honest cut. |
+| per-customer modal, pairs bought 6+ times | 8.9% | The subset where a usual price genuinely exists. |
 
-If the information is destroyed at write time, then write time is the only place
-to capture it. Everything downstream is reconstruction.
+The first two are in `reports/dataset_analysis.json`. The last two are
+reproducible from `data/sales_clean.csv` and were reproduced independently for
+this document (claim 5.2).
+
+**The defensible figure is 6 to 9 percent, not a third.** A single global price
+list overstates it. ERPNext models per-customer pricing properly through
+`Customer.default_price_list`, `Customer Group.default_price_list`, and Pricing
+Rule scoped by `customer_group`, and against a maintained baseline the real
+deviation rate is single digits.
+
+### What that means for detection
+
+At 6 to 9 percent a detector is feasible. It is expensive and imprecise. On a
+million line items a year, flagging every deviation from an established
+customer-specific price puts 60,000 to 90,000 lines into a review queue, almost
+all of them legitimate, permanently. Precision does not improve with volume,
+because the deviation is real business behaviour rather than noise that averages
+out.
+
+The comparison that matters is not feasible versus infeasible. It is that the
+two approaches answer different questions:
+
+| approach | false positives | question it answers |
+|---|---|---|
+| post-hoc detection | 6 to 9 percent of all lines | is this price unusual? |
+| write-time capture | none | did anybody decide this? |
+
+A price can be unusual and correct. A price can be ordinary and unconsidered.
+Only the second question is the one an auditor asks, and only the second
+distinguishes the two cases. Deviation is a proxy. A recorded reason, written at
+the moment of the write, is the fact.
+
+That is the entire positioning, and it is narrower than the argument this
+project started with.
 
 ## Who this is for
 
@@ -97,6 +135,9 @@ authorised 99.6% discount. That exact document exists in this repo
 entries, or any log separates "a salesperson approved this" from "an agent never
 looked up the price."
 
+A detector would flag that line, correctly, along with 6 to 9 percent of every
+other line in the company. It would not tell you which of them anybody decided.
+
 Two things that are **not** the problem, stated plainly so a reader does not have
 to work out what has been oversold:
 
@@ -112,7 +153,7 @@ to work out what has been oversold:
 What is worth naming is the consequence of those two ordinary facts together: a
 class of field where the server holds a correct value, the caller may overwrite
 it, and the resulting record is downstream-indistinguishable from a deliberate
-human decision. The census found six such fields on nine doctypes
+human decision. The census found seven such fields on nine doctypes
 (`reports/census.json`), from one derivation path.
 
 ## Competitive picture
@@ -124,11 +165,12 @@ ships server-side price controls, and an honest pitch names them first.
 
 | Control | Where | Default | What it catches | What it misses |
 |---|---|---|---|---|
-| `Item.max_discount` | `selling_controller.py:266-272` | unset per item | `discount_percentage` above a per-item ceiling | Reads `d.discount_percentage`, which `taxes_and_totals.py:221` sets to `0` when the caller supplied `rate` below `price_list_rate`. A caller that sends `rate` instead of `discount_percentage` is not bounded by it. |
+| `Item.max_discount` | `selling_controller.py:266-272` | unset per item | `discount_percentage` above a per-item ceiling | Reads `d.discount_percentage`, which `taxes_and_totals.py:221` sets to `0` when the caller supplied `rate` below `price_list_rate`. A caller that sends `rate` instead of `discount_percentage` is not bounded by it. Source-read, not reproduced. |
 | `Selling Settings.maintain_same_sales_rate` | `transaction_base.py:145-186`, gated at `sales_invoice.py:828-836` | `0` (off) | A downstream rate that differs from the upstream Sales Order or Delivery Note rate, hard stop unless the user holds `role_to_override_stop_action` | Only fires when the item row links to a prior document. The first document in a chain is unconstrained. |
 | `Selling Settings.validate_selling_price` | `selling_controller.py:287-332` | `0` (off) | A net rate below last purchase rate or valuation | Compares against cost, not against the price list. A price above cost but far below list passes. |
-| Server Script, doctype event | `frappe/model/document.py:1705`, `server_script_utils.py` | none installed | Anything you write, server-side, on the API path as well as the UI path | You have to write it, per field, per doctype, and keep it correct as the schema moves. |
-| Role permissions | `frappe/model/document.py:730` | full access for System Manager | Denies `create`/`write` on a doctype entirely | All or nothing at the doctype level. It cannot express "may write this document but not assert this field." |
+| Pricing Rule | `taxes_and_totals.py:170-221` | none defined | Applies a configured discount or margin during validate, overwriting whatever the caller sent | It is a pricing mechanism, not a control. It silently replaces caller values including deliberate overrides, which is its own problem (see below). |
+| Server Script, doctype event | `frappe/model/document.py:1705` | none installed | Anything you write, server-side, on the API path as well as the UI path | You have to write it, per field, per doctype, and keep it correct as the schema moves. This is also the mechanism this project's own boundary uses. |
+| Role permissions | `frappe/model/document.py:730` | full access for System Manager | Denies `create`/`write` on a doctype entirely | All or nothing at the doctype level. It cannot express "may write this document but not assert this field," which is why the boundary pairs it with an endpoint. |
 
 Read that table as the case against building this rather than for it, then note
 what survives. `maintain_same_sales_rate` is the closest existing control and it
@@ -156,14 +198,11 @@ combinations violate segregation of duties, which transactions match a risk
 pattern. They are strong at the access question and at the "this user should not
 be able to both create a vendor and pay it" question.
 
-They are subject to the detection argument above. An SoD platform looking at
-finished Sales Invoices sees `rate=1, price_list_rate=250` and can flag it as a
-large discount, which is a rule you can already write in SQL. It cannot tell you
-whether a decision occurred. On a customer where 31.4% of lines are legitimately
-off any single reference price, that rule is mostly false positives.
-
-This product is upstream of them and complementary: it produces the field that
-would make their analytics work.
+On the pricing question they are the detector in the table above. They will
+surface 6 to 9 percent of lines as unusual and cannot rank within that set,
+because the deviation is real business behaviour. This product is upstream of
+them and complementary: it produces the field that turns "unusual" into
+"unexplained," which is a set small enough to review.
 
 ### Agent sandboxes and tool-permission layers
 
@@ -180,19 +219,46 @@ record what the value became. They cannot record what the value would have been,
 because nobody computed it. That is the specific gap this product fills, and it
 is why the control has to be in the write path rather than beside it.
 
-## Why this has to be at write time, restated
+## Why this has to be at write time
 
-The three-way split (derive / override / refuse) is only implementable while the
-server's own derivation is still reachable. Once the document is saved, the
-derived value is gone: the price list may have changed, the pricing rules may
-have changed, the customer's default price list may have changed. Recomputing
-the "should have been" value months later gives you a different number than the
-one that was available at write time, and comparing against it produces
-findings that are wrong in both directions.
+The three-way split is only implementable while the server's own derivation is
+still reachable. Once the document is saved, the derived value is gone: the
+price list may have changed, the pricing rules may have changed, the customer's
+default price list may have changed. Recomputing the "should have been" value
+months later gives a different number than the one that was available at write
+time, and comparing against it produces findings that are wrong in both
+directions.
 
-This is not a marketing distinction. It is the reason the `override` bucket
-records `derived_value` and `supplied_value` as a pair
-(`harness/intent.py:33-39`, `:242-245`) instead of just flagging the row.
+This is why the `override` bucket records `derived_value` and `supplied_value`
+as a pair rather than just flagging the row.
+
+## Write the audit record from the saved document
+
+A finding from building the enforced endpoint, and the sharpest engineering
+lesson in the repo.
+
+The endpoint sets a line's rate, then calls `doc.insert()`. ERPNext applies
+Pricing Rules during `validate`, which runs **after** the rate is set. A rule
+configured on the item can therefore rewrite the caller's value between the
+intent being formed and the document being persisted, with no error and no
+signal. In the observed case a caller's explicit reasoned override of 1.0 was
+replaced by 225.0, a rule-derived 10% off the 250.00 list price.
+
+An audit record built from what the endpoint *intended* would have asserted a
+decision that never took effect. It would have said "the caller chose 1.0, and
+here is why," about a document that says 225.0.
+
+`harness/server_scripts/bill_intent.py:52-74` therefore reads
+`doc.items[i].rate` back off the saved document and reports three values per
+line rather than one: `derived` (the list price), `requested` (what the caller
+asked for), and `stored` (what is actually persisted). When `stored` and
+`requested` disagree it emits a `DRIFT` warning into the record and counts it in
+`drift_detected`.
+
+The general rule, which applies to any provenance system on any ERP: **an audit
+record is a statement about a stored document, so it must be read from the
+stored document.** Anything else is a statement about the writer's intentions,
+which is exactly the thing the audit record exists to stop trusting.
 
 ## When you do NOT need this
 
@@ -201,8 +267,7 @@ reasons not to buy or build this:
 
 - **Only humans write.** If every transaction originates in the Desk UI, the
   derivation runs in the browser before save and the human sees the derived
-  value change. The gap this closes does not exist for you. Revisit when you add
-  an integration.
+  value change. Revisit when you add an integration.
 - **Agents only read.** A read-only MCP server cannot produce this failure.
 - **You already run the ERPNext controls and they cover your fields.** If
   `maintain_same_sales_rate` is `Stop`, `Item.max_discount` is set on the SKUs
@@ -210,25 +275,29 @@ reasons not to buy or build this:
   creating invoices from scratch, you have most of the value already, for free,
   server-side. Turning those on is cheaper than adopting anything here and you
   should do it first.
-- **Nothing in your ERP is derived.** Some deployments price everything from an
-  external system and treat ERPNext as a ledger of record. If the price list is
-  empty, there is no derivation to protect and every value is legitimately
-  caller-asserted.
-- **You cannot deploy server-side code.** On a hosted ERP whose API you cannot
-  extend, this control is advisory only. A client-side library binds the callers
-  that choose to use it and nothing else. See
-  [THREAT_MODEL.md](THREAT_MODEL.md), bypass 1. If you cannot install a Frappe
-  app or a Server Script, do not buy this expecting enforcement.
+- **A review queue at 6 to 9 percent is affordable for you.** If you write
+  thousands of lines a year rather than millions, a detector plus a human
+  reviewer is a smaller and more boring solution, and boring is worth a lot. The
+  argument for write-time capture is strongest where the queue would be
+  unmanageable or where the reviewer cannot reconstruct the decision anyway.
+- **Nothing in your ERP is derived.** If the price list is empty because
+  everything is priced by an external system, there is no derivation to protect
+  and every value is legitimately caller-asserted.
+- **You cannot deploy server-side code.** The boundary requires a Frappe Server
+  Script and a custom role. Without both, what remains is the client library,
+  which binds only the callers that choose to use it. On a hosted ERP whose API
+  you cannot extend, do not buy this expecting enforcement.
 - **You will not staff the catalog.** The refuse/override/derive assignment is a
-  standing claim about a moving codebase. `reports/census.json` is a snapshot
-  taken against ERPNext v16.34.1 on 2026-09-07. If nobody owns re-running it,
-  the catalog decays into a config file nobody trusts.
-- **A single ERPNext-native Server Script covers your one field.** If the whole
-  requirement is "never let anyone book a Sales Invoice line more than 20% below
-  list without a note," that is twenty lines of Server Script on the
-  `Before Validate` event, it runs server-side on every write path, and it needs
-  no new dependency. Reach for the full contract when you have many fields, many
-  doctypes, or a requirement to keep the derived value alongside the override.
+  standing claim about a moving codebase, snapshotted against ERPNext v16.34.1.
+  If nobody owns re-running the census, the catalog decays into a config file
+  nobody trusts. The census has already moved once between runs
+  (claim 2.1).
+- **A single Server Script covers your one field.** If the whole requirement is
+  "never let anyone book a Sales Invoice line more than 20% below list without a
+  note," that is a short Server Script on `Before Validate`, it runs server-side
+  on every write path, and it needs no new dependency. Reach for the full
+  contract when you have many fields, many doctypes, or a requirement to keep
+  the derived value alongside the override.
 
 ## What a buyer is actually buying
 
@@ -237,9 +306,11 @@ Not the enforcement code. Three things:
 1. **The catalog**, and a commitment to keep it accurate against ERPNext
    releases. `intents/catalog.yaml` is the asset. The engine that reads it is
    replaceable.
-2. **The evidence discipline.** [CLAIMS.md](CLAIMS.md) is the deliverable that a
+2. **The evidence discipline.** [CLAIMS.md](CLAIMS.md) is the deliverable a
    finance or audit reader can take to their own risk committee. Every entry in
-   the catalog names the census probe that put it there.
-3. **The permission boundary**, once the engine runs server-side. Until then,
-   what is on offer is a well-argued convention, and [THREAT_MODEL.md](THREAT_MODEL.md)
-   says so in the first section.
+   the catalog names the census probe that put it there, and every claim carries
+   its own strength rating including the weak ones.
+3. **The boundary**, which as of `reports/boundary.json` exists and holds for
+   the `bill` intent against a deliberately constrained identity. Its limits are
+   real and are stated in [THREAT_MODEL.md](THREAT_MODEL.md): it binds only
+   identities somebody chose to constrain, and it covers one intent so far.

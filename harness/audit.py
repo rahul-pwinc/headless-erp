@@ -60,7 +60,6 @@ import json
 import os
 import sys
 import time
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
@@ -75,7 +74,7 @@ GENESIS = "0" * 64
 # is either derived from these (value_delta) or is chain plumbing (seq,
 # prev_hash, record_hash). Changing this list changes every future hash, so it
 # is versioned: SCHEMA_VERSION is part of the hashed payload.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 HASHED_FIELDS = [
     "target_doctype",
     "target_name",
@@ -85,7 +84,9 @@ HASHED_FIELDS = [
     "row_idx",
     "fieldname",
     "derived_value",
-    "supplied_value",
+    "requested_value",
+    "stored_value",
+    "drift",
     "reason",
     "intent",
     "actor",
@@ -93,6 +94,11 @@ HASHED_FIELDS = [
     "actor_kind",
     "recorded_at",
 ]
+
+# Fields earlier versions of this module defined and no longer does.
+# ensure_doctype removes them, so a site that ran v1 converges on v2 instead of
+# carrying dead columns that queries would silently read as NULL.
+OBSOLETE_FIELDS = ["supplied_value", "supplied_num"]
 
 
 # --------------------------------------------------------------------------
@@ -149,21 +155,66 @@ def _field_spec() -> list[dict]:
         {"fieldname": "target_company", "fieldtype": "Link", "options": "Company",
          "label": "Company", "search_index": 1, "in_standard_filter": 1},
 
+        # THREE values, never two. This is the correction that matters most in
+        # the whole schema, and it was learned by being wrong:
+        #
+        #   derived    what the server computed from the price list
+        #   requested  what the caller asked for, with a reason
+        #   stored     what the saved document actually contains
+        #
+        # A two-column record (derived, requested) is an account of what the
+        # intent layer *decided*, and ERPNext is under no obligation to agree
+        # with it. A Pricing Rule runs during validate — after the intent layer
+        # has set the rate — and rewrote a line from 250 to 225, silently
+        # replacing an explicit, reasoned override of 1.0. The record built
+        # from intent said "250 -> 1.0, reason: goodwill". The document said
+        # 225. The audit trail was asserting a decision that never took effect.
+        #
+        # So `stored` is read back off the persisted document (see
+        # _stored_value), and the record is written from the document, not from
+        # the caller's intention. Anything else is a record of a wish.
         {"fieldname": "sec_override", "fieldtype": "Section Break", "label": "Override"},
         {"fieldname": "fieldname", "fieldtype": "Data", "label": "Fieldname", "reqd": 1,
          "search_index": 1, "in_standard_filter": 1, "in_list_view": 1},
         {"fieldname": "derived_value", "fieldtype": "Small Text", "label": "Derived Value",
          "description": "What the server computed before the caller was consulted."},
-        {"fieldname": "supplied_value", "fieldtype": "Small Text", "label": "Supplied Value",
+        {"fieldname": "requested_value", "fieldtype": "Small Text", "label": "Requested Value",
          "description": "What the caller asked for instead."},
+        {"fieldname": "stored_value", "fieldtype": "Small Text", "label": "Stored Value",
+         "description": "What the saved document actually holds, read back after "
+                        "insert and submit. This is the only one of the three that "
+                        "describes reality."},
         {"fieldname": "cb_override", "fieldtype": "Column Break"},
         {"fieldname": "is_numeric", "fieldtype": "Check", "label": "Is Numeric"},
         {"fieldname": "derived_num", "fieldtype": "Float", "label": "Derived (numeric)", "precision": "6"},
-        {"fieldname": "supplied_num", "fieldtype": "Float", "label": "Supplied (numeric)", "precision": "6"},
-        # supplied - derived. Signed on purpose: an auditor wants to see that
-        # the overrides in a period net to -412.50 of revenue, and which way.
-        {"fieldname": "value_delta", "fieldtype": "Float", "label": "Delta", "precision": "6",
-         "in_list_view": 1},
+        {"fieldname": "requested_num", "fieldtype": "Float", "label": "Requested (numeric)", "precision": "6"},
+        {"fieldname": "stored_num", "fieldtype": "Float", "label": "Stored (numeric)", "precision": "6"},
+        # stored - derived. The delta that actually reached the books, which is
+        # the one an auditor is adding up. Signed on purpose: Phase 6 found
+        # 21.3% of real lines price ABOVE list, so an unsigned "discount"
+        # column would misclassify one line in five.
+        {"fieldname": "value_delta", "fieldtype": "Float", "label": "Effective Delta",
+         "precision": "6", "in_list_view": 1,
+         "description": "stored - derived: what the override actually did to the books."},
+
+        {"fieldname": "sec_drift", "fieldtype": "Section Break", "label": "Drift"},
+        # Three-valued on purpose. "none" and "changed" are both assessments;
+        # "unverified" means the read-back could not find the field and no
+        # claim is being made. Collapsing the third state into "none" would
+        # turn an unknown into a clean bill of health.
+        {"fieldname": "drift", "fieldtype": "Select", "label": "Drift",
+         "options": "none\nchanged\nunverified", "default": "unverified",
+         "search_index": 1, "in_standard_filter": 1, "in_list_view": 1,
+         "description": "changed = the saved document does not hold what the caller "
+                        "requested, so some other ERPNext mechanism overrode the "
+                        "recorded decision."},
+        {"fieldname": "cb_drift", "fieldtype": "Column Break"},
+        # stored - requested. Zero when the decision took effect.
+        {"fieldname": "drift_delta", "fieldtype": "Float", "label": "Drift Delta",
+         "precision": "6",
+         "description": "stored - requested: how far the document diverged from the "
+                        "recorded decision."},
+        {"fieldname": "drift_note", "fieldtype": "Small Text", "label": "Drift Note"},
 
         {"fieldname": "sec_why", "fieldtype": "Section Break", "label": "Justification"},
         {"fieldname": "reason", "fieldtype": "Small Text", "label": "Reason", "reqd": 1},
@@ -244,7 +295,7 @@ def _doctype_spec() -> dict:
         "sort_field": "creation",
         "sort_order": "DESC",
         "search_fields": "target_doctype,target_name,fieldname,actor",
-        "description": "Immutable record of a caller-supplied value that overrode a server-derived one.",
+        "description": "Immutable record of an override: what the server derived, what the caller requested, and what the document actually stored.",
         "fields": _field_spec(),
         "permissions": _permission_spec(),
     }
@@ -266,8 +317,8 @@ def ensure_doctype(client: FrappeClient, verbose: bool = True, repair: bool = Tr
     (see _SAFE_RETYPE) — otherwise it is reported and left alone, because
     changing a column type under existing rows is a migration, not a fixup.
     """
-    report = {"created": False, "added_fields": [], "retyped": [],
-              "type_drift": [], "existing": True}
+    report = {"created": False, "added_fields": [], "removed_fields": [],
+              "retyped": [], "type_drift": [], "existing": True}
     if not client.exists("DocType", DOCTYPE):
         client.insert(_doctype_spec())
         report["created"] = True
@@ -281,6 +332,14 @@ def ensure_doctype(client: FrappeClient, verbose: bool = True, repair: bool = Tr
     want = _field_spec()
     missing = [f for f in want if f["fieldname"] not in live_fields]
     dirty = False
+
+    # Drop columns this module used to define. Only names in OBSOLETE_FIELDS are
+    # touched — never an unrecognised field, which might belong to someone else.
+    stale = [f for f in OBSOLETE_FIELDS if f in live_fields]
+    if stale:
+        live["fields"] = [f for f in live["fields"] if f["fieldname"] not in stale]
+        report["removed_fields"] = stale
+        dirty = True
 
     for f in want:
         got = live_fields.get(f["fieldname"])
@@ -306,6 +365,8 @@ def ensure_doctype(client: FrappeClient, verbose: bool = True, repair: bool = Tr
         if verbose:
             if report["added_fields"]:
                 print(f"  {DOCTYPE!r} existed; added {report['added_fields']}")
+            if report["removed_fields"]:
+                print(f"  {DOCTYPE!r}: dropped obsolete {report['removed_fields']}")
             for d in report["retyped"]:
                 print(f"  {DOCTYPE!r}: retyped {d['fieldname']} "
                       f"{d['live']} -> {d['expected']}")
@@ -364,19 +425,23 @@ class UnknownTarget(ValueError):
     """The document an override claims to be about does not exist."""
 
 
-def _target_facts(client: FrappeClient, doctype: str, name: str) -> dict:
-    """Snapshot the period-defining facts off the target document itself, so a
-    caller cannot mislabel which period its override lands in.
+def read_target(client: FrappeClient, doctype: str, name: str) -> dict:
+    """Fetch the *persisted* document. Every record is written from this.
 
-    This is also the referential check the framework no longer performs for us
-    (see the target_name comment in _field_spec). An override against a
-    document that does not exist is not a record of anything, so it is refused
-    at the writer rather than stored and puzzled over later.
+    Called after insert and after submit, so what comes back is the document
+    as ERPNext finally saved it — with Pricing Rules, tax templates, currency
+    rounding and every other validate-time mechanism already applied. The
+    caller's intention is not consulted for anything except `requested_value`.
     """
     try:
-        doc = client.get_doc(doctype, name)
+        return client.get_doc(doctype, name)
     except FrappeError as e:
         raise UnknownTarget(f"{doctype} {name!r} does not exist: {str(e)[:120]}") from e
+
+
+def _target_facts(doc: dict) -> dict:
+    """Period-defining facts, taken off the saved document rather than the
+    caller's payload, so a caller cannot mislabel which period it lands in."""
     return {
         "target_docstatus": doc.get("docstatus"),
         "target_posting_date": doc.get("posting_date") or doc.get("transaction_date")
@@ -385,15 +450,67 @@ def _target_facts(client: FrappeClient, doctype: str, name: str) -> dict:
     }
 
 
-@dataclass
-class OverrideRecord:
-    """What record_override needs. Mirrors intent.Override plus the context the
-    intent engine already has but was throwing away."""
-    fieldname: str
-    derived_value: Any
-    supplied_value: Any
-    reason: str
-    row_idx: int = 0
+# Sentinel distinguishing "the saved document holds None here" from "the field
+# could not be located in the saved document at all". Conflating them would let
+# an unreadable field masquerade as a clean, drift-free override.
+UNREADABLE = object()
+
+
+def _stored_value(doc: dict, fieldname: str, row_idx: int) -> Any:
+    """Read one field back out of the saved document.
+
+    row_idx < 0 means the override was on the parent. Otherwise the field lives
+    in a child table, and which table that is depends on the doctype — `items`
+    on the sales/purchase documents, `references` on Payment Entry, and so on.
+    Rather than hard-coding a map that goes stale, find the table by looking for
+    the one whose rows actually carry the field.
+    """
+    if row_idx is None or row_idx < 0:
+        return doc.get(fieldname, UNREADABLE)
+
+    candidates = [
+        k for k, v in doc.items()
+        if isinstance(v, list) and v and isinstance(v[0], dict) and fieldname in v[0]
+    ]
+    if not candidates:
+        return UNREADABLE
+    # `items` wins a tie: on documents that have several tables carrying `rate`,
+    # it is the line table the intent layer indexes into.
+    table = "items" if "items" in candidates else candidates[0]
+    rows = doc[table]
+    if row_idx >= len(rows):
+        return UNREADABLE
+    return rows[row_idx].get(fieldname, UNREADABLE)
+
+
+def _assess_drift(requested: Any, stored: Any, rnum: float | None,
+                  snum: float | None) -> tuple[str, float | None, str | None]:
+    """Compare what was asked for against what was saved.
+
+    Returns (drift, drift_delta, drift_note). Numeric comparison uses a
+    half-cent tolerance because ERPNext rounds to the document's currency
+    precision and a 0.004 difference is rounding, not an override being
+    overridden.
+    """
+    if stored is UNREADABLE:
+        return ("unverified", None,
+                "the field could not be located in the saved document; no claim is "
+                "made about whether the requested value took effect")
+    if rnum is not None and snum is not None:
+        delta = snum - rnum
+        if abs(delta) < 0.005:
+            return "none", 0.0, None
+        return ("changed", delta,
+                f"the saved document holds {snum} where {rnum} was requested "
+                f"(delta {delta:+.6g}). Another ERPNext mechanism — a Pricing Rule, "
+                f"a tax or currency rule, or a server hook — overrode the recorded "
+                f"decision after the intent layer applied it.")
+    if _canon(requested) == _canon(stored):
+        return "none", None, None
+    return ("changed", None,
+            f"the saved document holds {_canon(stored)!r} where "
+            f"{_canon(requested)!r} was requested. Another ERPNext mechanism "
+            f"overrode the recorded decision after the intent layer applied it.")
 
 
 def record_override(
@@ -403,15 +520,21 @@ def record_override(
     target_name: str,
     fieldname: str,
     derived_value: Any,
-    supplied_value: Any,
+    requested_value: Any,
     reason: str,
     actor: str,
     row_idx: int = 0,
     intent: str | None = None,
     actor_kind: str = "Agent",
-    target_facts: dict | None = None,
+    saved_doc: dict | None = None,
 ) -> dict:
     """Write one immutable override record. Returns the saved, submitted doc.
+
+    The record is built from the PERSISTED target document, never from what the
+    caller intended. `saved_doc` is the target as ERPNext stored it; if it is
+    not supplied it is fetched here. `stored_value` and every drift assessment
+    come from that document, and `requested_value` is the only field the caller
+    gets to determine.
 
     Insert-then-submit is two HTTP calls, which means a crash between them can
     leave a draft. A draft record is *visible* to every query below (they do
@@ -423,10 +546,17 @@ def record_override(
     if not (actor or "").strip():
         raise ValueError("an override record requires an actor")
 
-    facts = target_facts if target_facts is not None else _target_facts(
+    doc = saved_doc if saved_doc is not None else read_target(
         client, target_doctype, target_name)
+    facts = _target_facts(doc)
 
-    dnum, snum = _as_num(derived_value), _as_num(supplied_value)
+    stored_value = _stored_value(doc, fieldname, row_idx)
+    dnum = _as_num(derived_value)
+    rnum = _as_num(requested_value)
+    snum = None if stored_value is UNREADABLE else _as_num(stored_value)
+    drift, drift_delta, drift_note = _assess_drift(
+        requested_value, stored_value, rnum, snum)
+
     payload = {
         "doctype": DOCTYPE,
         "target_doctype": target_doctype,
@@ -434,11 +564,19 @@ def record_override(
         "row_idx": row_idx,
         "fieldname": fieldname,
         "derived_value": _canon(derived_value),
-        "supplied_value": _canon(supplied_value),
+        "requested_value": _canon(requested_value),
+        "stored_value": None if stored_value is UNREADABLE else _canon(stored_value),
         "is_numeric": 1 if (dnum is not None and snum is not None) else 0,
         "derived_num": dnum,
-        "supplied_num": snum,
+        "requested_num": rnum,
+        "stored_num": snum,
+        # stored - derived: what actually reached the books, not what was asked
+        # for. When a Pricing Rule overrides the override, this is the rule's
+        # effect, which is the number that ties to the ledger.
         "value_delta": (snum - dnum) if (dnum is not None and snum is not None) else None,
+        "drift": drift,
+        "drift_delta": drift_delta,
+        "drift_note": drift_note,
         "reason": reason.strip(),
         "intent": intent,
         "actor": actor,
@@ -506,27 +644,38 @@ def record_result(client: FrappeClient, result: Any, actor: str,
 
         audit.record_result(self.client, res, actor=caller_identity)
 
+    **Call it after submit, not after insert.** The target document is read
+    back once here and every record in the batch is built from that read. If it
+    happens before submit, the read misses anything the submit path changes and
+    every record in the batch is a claim about a document state that no longer
+    exists.
+
     Deliberately duck-typed on `.doctype`, `.name`, `.intent`, `.overrides`, so
-    it needs no import from intent.py and creates no cycle.
+    it needs no import from intent.py and creates no cycle. `result.overrides`
+    may carry either `.requested_value` or the older `.supplied_value` — the
+    intent engine's `Override` dataclass currently uses the latter.
     """
     if not getattr(result, "overrides", None) or not getattr(result, "name", None):
         return []
-    facts = _target_facts(client, result.doctype, result.name)
+    doc = read_target(client, result.doctype, result.name)
     out = []
     for o in result.overrides:
+        requested = getattr(o, "requested_value", None)
+        if requested is None:
+            requested = getattr(o, "supplied_value", None)
         out.append(record_override(
             client,
             target_doctype=result.doctype,
             target_name=result.name,
             fieldname=o.fieldname,
             derived_value=o.derived_value,
-            supplied_value=o.supplied_value,
+            requested_value=requested,
             reason=o.reason,
             row_idx=getattr(o, "row_idx", 0),
             intent=getattr(result, "intent", None),
             actor=actor,
             actor_kind=actor_kind,
-            target_facts=facts,
+            saved_doc=doc,
         ))
     return out
 
@@ -537,8 +686,10 @@ def record_result(client: FrappeClient, result: Any, actor: str,
 
 LIST_FIELDS = [
     "name", "seq", "target_doctype", "target_name", "row_idx", "target_docstatus",
-    "target_posting_date", "target_company", "fieldname", "derived_value",
-    "supplied_value", "derived_num", "supplied_num", "value_delta", "is_numeric",
+    "target_posting_date", "target_company", "fieldname",
+    "derived_value", "requested_value", "stored_value",
+    "derived_num", "requested_num", "stored_num", "value_delta", "is_numeric",
+    "drift", "drift_delta", "drift_note",
     "reason", "intent", "actor", "actor_kind", "actor_user", "recorded_at",
     "record_hash", "prev_hash", "docstatus",
 ]
@@ -556,6 +707,7 @@ def overrides_in_period(
     target_doctype: str | None = None,
     actor: str | None = None,
     company: str | None = None,
+    drift: str | list[str] | None = None,
     resolve: bool = True,
 ) -> list[dict]:
     """"Show me every override on any document in period X, by field, with
@@ -579,6 +731,8 @@ def overrides_in_period(
         filters["actor"] = actor
     if company:
         filters["target_company"] = company
+    if drift:
+        filters["drift"] = ["in", [drift] if isinstance(drift, str) else list(drift)]
     rows = client.call(
         "frappe.client.get_list", doctype=DOCTYPE, filters=filters,
         fields=LIST_FIELDS, order_by="target_posting_date asc, seq asc",
@@ -627,6 +781,47 @@ def _amendment_family(client: FrappeClient, doctype: str, name: str) -> list[str
     return sorted(seen)
 
 
+def overrides_with_drift(client: FrappeClient, from_date: str | None = None,
+                        to_date: str | None = None, *, basis: str = "posting",
+                        include_unverified: bool = True,
+                        resolve: bool = True) -> list[dict]:
+    """"Show me every override that did not actually take effect."
+
+    An override whose `drift` is "changed" was recorded, reasoned, attributed —
+    and then overwritten by something else before the document was saved. The
+    books do not reflect the decision the log describes. That is a distinct and
+    more alarming class of finding than an override that simply happened, and
+    it is why `drift` is an indexed, filterable column rather than a note.
+
+    `include_unverified` also returns records where the field could not be read
+    back at all. Those are not evidence of drift; they are evidence that no
+    assessment was possible, and an auditor should see them rather than have
+    them quietly counted as clean.
+    """
+    wanted = ["changed"] + (["unverified"] if include_unverified else [])
+    filters: dict[str, Any] = {"drift": ["in", wanted]}
+    if from_date and to_date:
+        filters[_BASIS[basis]] = ["between", [from_date, to_date]]
+    rows = client.call(
+        "frappe.client.get_list", doctype=DOCTYPE, filters=filters,
+        fields=LIST_FIELDS, order_by="target_posting_date asc, seq asc",
+        limit_page_length=0) or []
+    return resolve_targets(client, rows) if resolve else rows
+
+
+def overrides_by_drift(client: FrappeClient, from_date: str | None = None,
+                       to_date: str | None = None, *, basis: str = "posting") -> list[dict]:
+    """Aggregate: how many overrides in the period actually took effect."""
+    filters: dict[str, Any] = {}
+    if from_date and to_date:
+        filters[_BASIS[basis]] = ["between", [from_date, to_date]]
+    rows = client.call(
+        "frappe.client.get_list", doctype=DOCTYPE, filters=filters,
+        fields=["drift", {"COUNT": "name"}, {"SUM": "drift_delta"}],
+        group_by="drift", order_by="drift asc", limit_page_length=0) or []
+    return [_normalise_agg(r) for r in rows]
+
+
 def overrides_by_field(client: FrappeClient, from_date: str | None = None,
                        to_date: str | None = None, *, basis: str = "posting") -> list[dict]:
     """Aggregate: count, net delta and distinct-document count per field.
@@ -640,9 +835,10 @@ def overrides_by_field(client: FrappeClient, from_date: str | None = None,
         filters[_BASIS[basis]] = ["between", [from_date, to_date]]
     rows = client.call(
         "frappe.client.get_list", doctype=DOCTYPE, filters=filters,
-        fields=["fieldname", "target_doctype", {"COUNT": "name"},
-                {"SUM": "value_delta"}, {"MIN": "value_delta"}, {"MAX": "value_delta"}],
-        group_by="fieldname, target_doctype", order_by="fieldname asc",
+        fields=["fieldname", "target_doctype", "drift", {"COUNT": "name"},
+                {"SUM": "value_delta"}, {"MIN": "value_delta"}, {"MAX": "value_delta"},
+                {"SUM": "drift_delta"}],
+        group_by="fieldname, target_doctype, drift", order_by="fieldname asc",
         limit_page_length=0) or []
     return [_normalise_agg(r) for r in rows]
 
@@ -664,6 +860,7 @@ _AGG_ALIASES = {
     "sum(`value_delta`)": "net_delta", "sum(value_delta)": "net_delta",
     "min(`value_delta`)": "min_delta", "min(value_delta)": "min_delta",
     "max(`value_delta`)": "max_delta", "max(value_delta)": "max_delta",
+    "sum(`drift_delta`)": "net_drift", "sum(drift_delta)": "net_drift",
 }
 
 

@@ -86,7 +86,6 @@ def main() -> int:
     print(f"\n  fixtures: item {item} lists at {lp} on {fx['price_list']}")
 
     head("1.  WRITE — six real overrides on real submitted documents")
-    written = []
 
     def run(label, lines, overrides, actor, kind="Agent"):
         # The instance is shared with other processes during development, and
@@ -102,7 +101,6 @@ def main() -> int:
             print(f"      -> {rec['name']}  {rec['fieldname']} row {rec['row_idx']}  "
                   f"{rec['derived_num']} -> {rec['supplied_num']}  "
                   f"delta {rec['value_delta']}  docstatus={rec['docstatus']}")
-        written.append((res, recs))
         return res
 
     run("a. discount: sold below list",
@@ -143,7 +141,6 @@ def main() -> int:
         for rec in recs:
             print(f"      -> {rec['name']}  {rec['fieldname']}  "
                   f"{rec['derived_num']} -> {rec['supplied_num']}")
-        written.append((amended, recs))
 
     # ----------------------------------------------------------------- queries
     head("3.  QUERY — 'every override on any document in period X, "
@@ -276,7 +273,7 @@ def _boundary_demo(c, url):
     d2 = c.insert({"doctype": PROBE_DT, "note": "as Administrator", "guarded": 999})
     print(f"  Administrator POSTs guarded=999   -> stored {d2['guarded']}   "
           f"<- permlevel does not apply to Administrator")
-    print("    (document.py:1025 — `if frappe.session.user == \"Administrator\": return`)")
+    print("    (document.py:1026 — `if frappe.session.user == \"Administrator\": return`)")
     print("\n  Note the failure mode: the write is silently DISCARDED, not refused. A")
     print("  boundary makes the bypass ineffective; making it loud needs a validate")
     print("  hook that rejects rate != price_list_rate without a matching log record.")

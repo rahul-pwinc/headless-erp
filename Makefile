@@ -48,6 +48,15 @@ contract:
 	$(PYTHON) harness/prove_intent.py
 	@echo "==> contract: done -- reports/intent_proof.json"
 
+# --- enforcement boundary: the intent contract as a server-side control ---
+# Requires server_script_enabled: true in the ERPNext container's
+# sites/common_site_config.json -- see docs/REPRODUCE.md for how to set it.
+# `boundary` provisions it (idempotent) and then proves it in the same run.
+boundary:
+	@echo "==> boundary: provisioning + proving the enforcement boundary (8 checks)"
+	$(PYTHON) harness/prove_boundary.py
+	@echo "==> boundary: done -- reports/boundary.json"
+
 # --- Phase 5: the use-case corpus -----------------------------------------
 corpus:
 	@echo "==> corpus: Phase 5 use-case corpus (39 accounting-principle scenarios)"
@@ -65,6 +74,6 @@ simulate: data
 	@echo "==> simulate: done -- reports/simulation.json"
 
 # --- the whole thing, in the order the README presents it -----------------
-all: setup up data diff census contract corpus simulate
+all: setup up data diff census contract corpus boundary simulate
 	@echo "==> all: full pipeline complete. See docs/REPRODUCE.md for what each report proves."
 

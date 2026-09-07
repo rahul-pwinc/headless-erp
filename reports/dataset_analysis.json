@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-07T19:05:04.028063+00:00",
+  "generated_at": "2026-09-07T19:13:13.262624+00:00",
   "lines_analysed": 1033527,
   "at_list": 709344,
   "below_list": 104513,
@@ -23,9 +23,27 @@
     "description": "list price := the modal (most frequent) price that THIS customer paid for THIS SKU, i.e. each customer's own usual price treated as their list. Answers 'how often does a customer pay something other than what they usually pay for this item', which is not circular in the same way the pooled-median definition is. Computed only over lines that carry a Customer ID.",
     "lines_with_customer_id": 801418,
     "lines_excluded_no_customer_id": 232109,
+    "lines": 801418,
     "at_reference": 774078,
     "off_reference": 27340,
     "off_list_pct": 3.41145319920441,
     "off_list_revenue_pct": 8.695526060135107
+  },
+  "per_customer_reference_excl_single_purchase": {
+    "description": "Same as per_customer_reference, but excludes (StockCode, CustomerID) pairs bought only once: with a single sample the mode is that sale, so it is trivially 'at reference' and cannot show a deviation. This isolates cases where the customer's usual price is actually established by repetition.",
+    "single_purchase_pairs_pct_of_customer_lines": 42.874629718823385,
+    "lines": 457813,
+    "at_reference": 430473,
+    "off_reference": 27340,
+    "off_list_pct": 5.971870610926295,
+    "off_list_revenue_pct": 13.059880813241168
+  },
+  "per_customer_reference_min6_purchases": {
+    "description": "Same reference (each customer's own modal price for the SKU), restricted to (StockCode, CustomerID) pairs with at least 6 purchases -- an established, well-sampled buying pattern, not just 'not a one-off'.",
+    "lines": 139690,
+    "at_reference": 127189,
+    "off_reference": 12501,
+    "off_list_pct": 8.949101582074594,
+    "off_list_revenue_pct": 17.891732813146753
   }
 }

@@ -1,5 +1,5 @@
 {
-  "passed": 7,
+  "passed": 8,
   "total": 8,
   "checks": [
     {
@@ -28,7 +28,7 @@
     },
     {
       "check": "override with a reason",
-      "pass": false
+      "pass": true
     },
     {
       "check": "item with no resolvable price",

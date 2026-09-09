@@ -53,7 +53,7 @@ contract:
 # sites/common_site_config.json -- see docs/REPRODUCE.md for how to set it.
 # `boundary` provisions it (idempotent) and then proves it in the same run.
 boundary:
-	@echo "==> boundary: provisioning + proving the enforcement boundary (10 checks)"
+	@echo "==> boundary: provisioning + proving the enforcement boundary (11 checks)"
 	$(PYTHON) harness/prove_boundary.py
 	@echo "==> boundary: done -- reports/boundary.json"
 

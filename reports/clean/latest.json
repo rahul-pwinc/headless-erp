@@ -1,0 +1,57 @@
+{
+  "generated_at": "2026-09-09T06:53:22.072516+00:00",
+  "erpnext_url": "http://localhost:8080",
+  "list_price": 250.0,
+  "asserted_rate": 1.0,
+  "results": [
+    {
+      "case_name": "sales_invoice_single_line",
+      "mode": "omit",
+      "ui_doc_name": "ACC-SINV-2026-00001",
+      "api_doc_name": "ACC-SINV-2026-00002",
+      "gaps": [],
+      "ui_grand_total": 1000.0,
+      "api_grand_total": 1000.0,
+      "api_doc_balances": true,
+      "error": null,
+      "gap_count": 0
+    },
+    {
+      "case_name": "sales_invoice_single_line",
+      "mode": "assert",
+      "ui_doc_name": "ACC-SINV-2026-00003",
+      "api_doc_name": "ACC-SINV-2026-00004",
+      "gaps": [
+        {
+          "doctype": "Sales Invoice",
+          "row_idx": 0,
+          "fieldname": "rate",
+          "ui_value": 250.0,
+          "api_value": 1.0,
+          "mode": "assert"
+        },
+        {
+          "doctype": "Sales Invoice",
+          "row_idx": 0,
+          "fieldname": "discount_amount",
+          "ui_value": 0.0,
+          "api_value": 249.0,
+          "mode": "assert"
+        },
+        {
+          "doctype": "Sales Invoice",
+          "row_idx": 0,
+          "fieldname": "net_rate",
+          "ui_value": 250.0,
+          "api_value": 1.0,
+          "mode": "assert"
+        }
+      ],
+      "ui_grand_total": 1000.0,
+      "api_grand_total": 4.0,
+      "api_doc_balances": true,
+      "error": null,
+      "gap_count": 3
+    }
+  ]
+}

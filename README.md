@@ -106,6 +106,15 @@ Python.
 
 ---
 
+
+**The census count is history-dependent, and that is not a defect in the census.**
+A fresh instance reports 196 probes and 6 accepted fields. An instance that has
+already recorded purchases reports 203 and 7, the extra being
+`last_purchase_rate`, which `get_item_details` only returns once an item has a
+purchase history to read. `make all` runs the census before the corpus creates
+any purchase documents, so a clone reproduces the smaller number. Both are in
+`reports/clean/census.json` lineage; the six-field set is the stable claim.
+
 ## Why this class of error survives every check you run
 
 **The ledger balances.** Always, by construction.

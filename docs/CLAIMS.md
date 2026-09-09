@@ -153,7 +153,7 @@ list price 250.00, qty 4.
 
 | # | Claim | Evidence | Method | Strength |
 |---|---|---|---|---|
-| 7.1 | A boundary exists that makes the contract non-bypassable for a constrained identity. 10 of 10 checks pass. | `reports/boundary.json` | empirical | B |
+| 7.1 | A boundary exists that makes the contract non-bypassable for a constrained identity. 11 of 11 checks pass. | `reports/boundary.json` | empirical | B |
 | 7.2 | An unconstrained identity (`Administrator`) can still POST a Sales Invoice with `rate: 1.0` straight to `/api/resource` and it is accepted. | `reports/boundary.json` check `admin direct write allowed`, driven by `harness/prove_boundary.py:29-36` | empirical | A. This is the control case. Without it the 403 in 7.3 would prove nothing about the boundary and only that something was broken. |
 | 7.3 | The constrained identity gets HTTP 403 on the same direct write. | `reports/boundary.json` check `agent direct write blocked`; the request is made with a plain `requests.Session` after logging in as the agent user (`harness/prove_boundary.py:38-46`), so nothing about the check depends on the client library behaving. | empirical | B |
 | 7.4 | The permission denial is enforced by Frappe itself, not by anything in this repo. | `Document.insert()` calls `check_permission("create")` at `vendor/frappe/frappe/model/document.py:477`, and every REST and `frappe.client` write route reaches `insert()` or `save()`. | source | A |

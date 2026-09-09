@@ -17,7 +17,7 @@ entirely unconstrained.
 `harness/server_scripts/bill_intent.py` runs server-side. Paired with the role
 that `harness/enforce.py` provisions, it is a real boundary: the constrained
 identity cannot write a Sales Invoice by any route except the endpoint.
-`reports/boundary.json` records 10 of 10 checks, including the control case
+`reports/boundary.json` records 11 of 11 checks, including the control case
 (`Administrator` posting `rate: 1.0` directly is allowed) and the boundary case
 (the constrained identity gets 403).
 

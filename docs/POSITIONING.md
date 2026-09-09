@@ -38,7 +38,7 @@ between them is the difference between advice and a control:
 `harness/enforce.py` provisions the boundary that makes the second one real: a
 role with no write permission on any transaction doctype, read-only access to
 the master data an agent legitimately needs, and the `bill_intent` endpoint as
-the only way in. `reports/boundary.json` records 10 of 10 checks passing,
+the only way in. `reports/boundary.json` records 11 of 11 checks passing,
 including the two that matter: `Administrator` posting `rate: 1.0` straight to
 `/api/resource/Sales Invoice` is allowed, and the constrained identity doing the
 same gets 403.

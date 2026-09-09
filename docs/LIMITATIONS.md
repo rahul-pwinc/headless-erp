@@ -185,7 +185,7 @@ all three files.
 
 ## 6. The enforcement boundary is narrow
 
-`reports/boundary.json` records 10 of 10 checks passing. What that does and does
+`reports/boundary.json` records 11 of 11 checks passing. What that does and does
 not cover:
 
 - **One intent.** `bill_intent` is the only Server Script installed

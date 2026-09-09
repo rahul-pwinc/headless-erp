@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-09-09T06:57:42.590124+00:00",
+  "invoices_replayed": 1000,
+  "elapsed_seconds": 244.23975110054016,
+  "stats": {
+    "naive_written": 1000,
+    "naive_offlist_lines": 1160,
+    "naive_offlist_unrecorded": 1160,
+    "intent_written": 1000,
+    "intent_overrides_recorded": 1160,
+    "intent_atlist_lines": 2965,
+    "naive_atlist_lines": 2965
+  },
+  "override_examples": [
+    {
+      "doc": "ACC-SINV-2026-00055",
+      "field": "rate",
+      "derived": 7.95,
+      "supplied": 6.75,
+      "reason": "source invoice 546527 priced at 6.75 vs list 7.95"
+    },
+    {
+      "doc": "ACC-SINV-2026-00059",
+      "field": "rate",
+      "derived": 7.49,
+      "supplied": 7.95,
+      "reason": "source invoice 543277 priced at 7.95 vs list 7.49"
+    },
+    {
+      "doc": "ACC-SINV-2026-00061",
+      "field": "rate",
+      "derived": 4.95,
+      "supplied": 5.75,
+      "reason": "source invoice 553663 priced at 5.75 vs list 4.95"
+    },
+    {
+      "doc": "ACC-SINV-2026-00063",
+      "field": "rate",
+      "derived": 12.75,
+      "supplied": 10.95,
+      "reason": "source invoice 534048 priced at 10.95 vs list 12.75"
+    },
+    {
+      "doc": "ACC-SINV-2026-00065",
+      "field": "rate",
+      "derived": 7.95,
+      "supplied": 6.75,
+      "reason": "source invoice 560853 priced at 6.75 vs list 7.95"
+    }
+  ],
+  "errors": {}
+}

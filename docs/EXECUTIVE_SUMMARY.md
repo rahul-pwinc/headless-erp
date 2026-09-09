@@ -41,7 +41,7 @@ installation:
 - **A working control.** An automated identity is denied permission to write
   invoices directly and can only act through a vetted operation that computes
   every derivable value itself, refuses ten fields outright, and permits a
-  deliberate override only with a recorded reason. **14 of 14 checks pass**,
+  deliberate override only with a recorded reason. <!-- BEGIN GENERATED BOUNDARY -->**14 of 14 checks pass**<!-- END GENERATED BOUNDARY -->,
   including one that forces the audit record to fail and confirms the invoice is
   rolled back rather than posted unrecorded.
 - **Retries do not double-post.** Six simultaneous identical requests produce one

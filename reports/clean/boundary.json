@@ -1,6 +1,6 @@
 {
-  "passed": 11,
-  "total": 11,
+  "passed": 14,
+  "total": 14,
   "checks": [
     {
       "check": "admin direct write allowed",
@@ -44,6 +44,18 @@
     },
     {
       "check": "forced audit failure rolls back",
+      "pass": true
+    },
+    {
+      "check": "script restored after forced failure",
+      "pass": true
+    },
+    {
+      "check": "idempotent replay",
+      "pass": true
+    },
+    {
+      "check": "idempotent under concurrency",
       "pass": true
     }
   ]

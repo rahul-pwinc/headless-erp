@@ -118,7 +118,13 @@ def main() -> int:
     # with an override, and assert both that the call fails AND that no invoice
     # survives. Restore the real script afterwards.
     print("\n5. forced audit failure rolls the invoice back")
-    good = open(SCRIPT_PATH).read().replace("__ALLOWED_COMPANY__", HDR["company"])
+    # Read the DEPLOYED script rather than re-substituting from disk. An earlier
+    # version rebuilt it from SCRIPT_PATH and substituted only
+    # __ALLOWED_COMPANY__, leaving a literal __ALLOWED_PARTIES__ behind. The
+    # restore then matched no customer and every later check failed with 417,
+    # which the idempotency checks caught immediately. Restoring from what was
+    # actually deployed has no substitutions to forget.
+    good = admin.get_doc("Server Script", "bill_intent")["script"]
     broken = good.replace('AUDIT_DOCTYPE = "Intent Override Log"',
                           'AUDIT_DOCTYPE = "Intent Override Log DOES NOT EXIST"')
     assert broken != good, "failed to break the audit doctype name"
@@ -145,7 +151,69 @@ def main() -> int:
     finally:
         admin.call("frappe.client.set_value", doctype="Server Script",
                    name="bill_intent", fieldname="script", value=good)
-        print("        (real script restored)")
+        # Re-read and confirm the restore actually took. Restoring is itself a
+        # write, and this file has already been bitten once by trusting one.
+        back = admin.get_doc("Server Script", "bill_intent")["script"]
+        restored = back == good and "__ALLOWED_" not in back
+        print(f"        (real script restored: {restored})")
+        results.append(("script restored after forced failure", restored))
+
+    # ---- idempotency -----------------------------------------------------
+    # Every integration retries. A retry after a deadlock without an
+    # idempotency key creates a second invoice, and at scale that is a
+    # double-posted ledger. Two cases: sequential replay, and the harder
+    # simultaneous case where the database has to settle it rather than the
+    # application, because a check-then-insert in the script has a window.
+    import uuid as _uuid
+    from concurrent.futures import ThreadPoolExecutor as _TPE
+
+    print("\n6. idempotency")
+    key = f"boundary-{_uuid.uuid4().hex[:12]}"
+    payload = {**HDR, "idempotency_key": key,
+               "items": [{"item_code": "HL-WIDGET-001", "qty": 4}],
+               "overrides": [{"row": 0, "field": "rate", "value": 7.0,
+                              "reason": "idempotency boundary check"}]}
+    seen = []
+    for _ in range(3):
+        rr = s.post(f"{URL}/api/method/bill_intent", json=payload)
+        seen.append(rr.json().get("message", {}) if rr.status_code == 200 else {})
+    inv = admin.call("frappe.client.get_list", doctype="Sales Invoice",
+                     filters={"intent_idempotency_key": key},
+                     fields=["name"], limit_page_length=0) or []
+    logs = (admin.call("frappe.client.get_list", doctype="Intent Override Log",
+                       filters={"target_name": inv[0]["name"]}, fields=["name"],
+                       limit_page_length=0) or []) if inv else []
+    ok = len(inv) == 1 and len(logs) == 1 and [m.get("replayed") for m in seen] == [False, True, True]
+    print(f"   {'ok  ' if ok else 'FAIL'} three identical sends -> one invoice, one audit record")
+    print(f"        invoices={len(inv)} audit_records={len(logs)} "
+          f"replayed={[m.get('replayed') for m in seen]}")
+    results.append(("idempotent replay", ok))
+
+    # Simultaneous first attempts. The unique index on the custom field is what
+    # makes this safe; the script's check-then-insert alone would not be.
+    ckey = f"boundary-conc-{_uuid.uuid4().hex[:10]}"
+    cpayload = {**payload, "idempotency_key": ckey}
+    cookies = dict(s.cookies)
+
+    def _fire(_):
+        t = requests.Session()
+        t.cookies.update(cookies)
+        if os.environ.get("ERPNEXT_SITE"):
+            t.headers["Host"] = os.environ["ERPNEXT_SITE"]
+        rr = t.post(f"{URL}/api/method/bill_intent", json=cpayload)
+        return rr.status_code
+
+    with _TPE(max_workers=6) as ex:
+        codes = list(ex.map(_fire, range(6)))
+    cinv = admin.call("frappe.client.get_list", doctype="Sales Invoice",
+                      filters={"intent_idempotency_key": ckey},
+                      fields=["name"], limit_page_length=0) or []
+    cok = len(cinv) == 1
+    print(f"   {'ok  ' if cok else 'FAIL'} six simultaneous sends of one key -> one invoice")
+    print(f"        invoices={len(cinv)}  responses={codes}")
+    if not cok:
+        print("        a duplicate got through: the unique index is not holding")
+    results.append(("idempotent under concurrency", cok))
 
     passed = sum(1 for _, p in results if p)
     print(f"\n{'='*66}\n{passed}/{len(results)} boundary checks passed")

@@ -304,7 +304,7 @@ separately, flagging `DRIFT` when the last two disagree
 |---|---|---|
 | contract cases | **10 / 10** | `reports/clean/intent_proof.json` |
 | accounting corpus | **49 / 52** across 8 categories | `reports/clean/corpus.json` |
-| enforcement boundary | **11 / 11** | `reports/clean/boundary.json` |
+| enforcement boundary | **14 / 14** | `reports/clean/boundary.json` |
 | derivation census | 196 probes, 144 protected, 42 accepted, 10 rejected; 6 fields | `reports/clean/census.json` |
 | differential | 0 gaps when `rate` is omitted, 3 when asserted (1000.0 vs 4.0) | `reports/clean/latest.json` |
 | replay at scale | 1,000 invoices written twice, 4,125 lines, 1,160 overrides recorded, 0 invariant failures, 244s | `reports/clean/simulation.json` |

@@ -6,27 +6,23 @@ boundary so that a reader does not have to discover it themselves.
 
 Claim numbers refer to [CLAIMS.md](CLAIMS.md).
 
-## Idempotency: a caller racing itself gets an error, not a replay
+## Idempotency
 
-`make boundary` proves two cases. Three sequential sends of one idempotency key
-produce one invoice and one audit record, with `replayed` false then true then
-true. Six simultaneous sends of one key also produce exactly one invoice, because
-the key lives in a Custom Field with `unique=1` and the database settles the race
-rather than the script, whose check-then-insert has a window.
+`make boundary` proves two cases on a site provisioned from scratch by
+`harness/enforce.py`. Three sequential sends of one key produce one invoice and
+one audit record, with `replayed` false then true then true. Six simultaneous
+sends of one key produce one invoice and **six HTTP 200s**, five of them
+`replayed: true, raced: true`.
 
-What the losers get is worth stating: **one 200 and five 500s**, not one 200 and
-five clean replays. The unique index rejects them at insert, which is correct and
-safe, but the caller sees a server error rather than "this already exists". A
-client that treats 500 as retryable will retry and then get the replay, so the
-outcome is right; a client that treats 500 as fatal will report a failure for a
-write that succeeded.
+The key lives in a Custom Field with `unique=1`, so the database settles the
+race rather than the script, whose check-then-insert has a window. The loser of
+that race catches the duplicate-key error and returns the winner's document as a
+replay, because a control that answers a successful write with a server error is
+not something anyone integrates against.
 
-Closing it means catching the duplicate-key error inside the endpoint and
-converting it into the replay response. That is a small change and it is not
-done. It is listed here rather than in a commit message because the difference
-between "your write failed" and "your write already succeeded" is exactly the
-kind of thing an integration gets wrong at 3am.
-
+An earlier version of this section recorded one 200 and five 500s as an accepted
+limitation. That was sent back and was right to be: at 20,000 people every
+retrying client in the building would double-report.
 
 ## The library path still leaves drafts
 

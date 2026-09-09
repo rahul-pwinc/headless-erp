@@ -55,7 +55,7 @@
       "pass": true
     },
     {
-      "check": "idempotent under concurrency",
+      "check": "idempotent under concurrency, all callers get an answer",
       "pass": true
     }
   ]

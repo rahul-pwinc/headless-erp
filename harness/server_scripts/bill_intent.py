@@ -148,167 +148,194 @@ else:
         "intent_idempotency_key": IDEMPOTENCY_KEY,
         "items": rows,
     })
-    doc.insert(ignore_permissions=True)
-
-    # Submit. Leaving the document at docstatus 0 was a real hole: the control
-    # checked drift once at insert and then walked away, leaving a draft window in
-    # which anyone with a normal role could edit the rate and submit, while the
-    # audit record still described the draft. Submitting here closes that window
-    # for documents this endpoint creates.
-    #
-    # It also matters that validate runs AGAIN on submit, so a Pricing Rule can fire
-    # a second time and move a rate after the insert-time reconciliation. That is
-    # why the reconciliation below reads doc.items AFTER the submit, not before.
-    # insert() takes ignore_permissions as a parameter; submit() does not. It reads
-    # the flag off the document. Calling doc.submit() without setting it leaves the
-    # document at docstatus 0 and does NOT raise, so the endpoint reported success
-    # while every invoice it wrote stayed a draft. Silent no-op, exactly the failure
-    # mode this project is about.
-    doc.flags.ignore_permissions = True
-    doc.submit()
-    doc.reload()
-
-    # ---------------------------------------------------------------------------
-    # Reconcile intent against what was actually persisted, post-submit.
-    # ---------------------------------------------------------------------------
-    lines = []
-    drift_rows = []
-    for i in intents:
-        stored = doc.items[i["row"]].rate
-        rec = {"row": i["row"], "item": i["item"], "derived": i["derived"],
-               "intended": i["intended"], "stored": stored, "reason": i["reason"]}
-        # Half-cent tolerance, matching audit.py::_assess_drift: ERPNext rounds to
-        # the document's currency precision, and 0.004 is rounding, not an override
-        # being overridden.
-        gap = stored - i["intended"]
-        if gap < 0:
-            gap = 0 - gap
-        if gap >= 0.005:
-            rec["drift"] = "changed"
-            rec["drift_delta"] = stored - i["intended"]
-            rec["drift_note"] = ("the saved document holds " + str(stored) + " where "
-                                 + str(i["intended"]) + " was requested. Another ERPNext "
-                                 + "mechanism overrode the recorded decision after the "
-                                 + "intent layer applied it.")
-            drift_rows.append(rec)
-        else:
-            rec["drift"] = "none"
-            rec["drift_delta"] = 0.0
-            rec["drift_note"] = None
-        lines.append(rec)
+    RACED = False
+    try:
+        doc.insert(ignore_permissions=True)
+    except Exception as dup:
+        # Lost the race on the unique idempotency index. The winner's document
+        # is the correct answer, so return it as a replay rather than a 500.
+        #
+        # This was left as a LIMITATIONS entry and sent back, correctly: a
+        # control that returns a server error for a write that succeeded is not
+        # something anyone integrates against. Every retrying client in a large
+        # company would double-report.
+        other = None
+        if IDEMPOTENCY_KEY:
+            other = frappe.db.get_value("Sales Invoice",
+                                        {"intent_idempotency_key": IDEMPOTENCY_KEY}, "name")
+        if not other:
+            raise
+        d1 = frappe.get_doc("Sales Invoice", other)
+        logs1 = frappe.get_all(AUDIT_DOCTYPE, filters={"target_name": other},
+                               fields=["name"])
+        frappe.response["message"] = {
+            "name": d1.name, "grand_total": d1.grand_total, "lines": [],
+            "drift_detected": 0, "audit_records": [x["name"] for x in logs1],
+            "audit_error": None, "replayed": True, "raced": True,
+        }
+        RACED = True
 
 
-    def canon(v):
-        # Mirrors harness/audit.py::_canon for the value types this path produces.
-        if v is None:
-            return ""
-        if v is True:
-            return "true"
-        if v is False:
-            return "false"
-        return str(v)
-
-
-    def blob_v3(payload, prev_hash, seq):
-        parts = ["iol", "v3", str(seq), prev_hash]
-        for k in HASHED_FIELDS:
-            val = canon(payload.get(k))
-            parts.append(k + "=" + str(len(val)) + ":" + val)
-        return "|".join(parts)
-
-
-    # ---------------------------------------------------------------------------
-    # Write one Intent Override Log record per override. Same doctype, same chain,
-    # same immutability (insert then submit) as the library path.
-    # ---------------------------------------------------------------------------
-    written = []
-    # Retained in the response for shape stability, but it can no longer be set:
-    # a failed audit write now throws and rolls the invoice back.
-    audit_error = None
-    for rc in lines:
-        if not rc["reason"] and rc["drift"] == "none":
-            continue
-        try:
-            head = frappe.get_all(AUDIT_DOCTYPE, fields=["seq", "record_hash"],
-                                  order_by="seq desc", limit_page_length=1)
-            if head:
-                seq = (head[0].get("seq") or 0) + 1
-                prev = head[0].get("record_hash") or GENESIS
-            else:
-                seq = 1
-                prev = GENESIS
-
-            payload = {
-                "doctype": AUDIT_DOCTYPE,
-                "target_doctype": "Sales Invoice",
-                "target_name": doc.name,
-                # int() on purpose: docstatus is an IntEnum in Frappe 16 and str()
-                # of an enum is not str() of an int, which would break the hash.
-                "target_docstatus": int(doc.docstatus),
-                "target_posting_date": str(doc.posting_date),
-                "target_company": doc.company,
-                "row_idx": rc["row"],
-                "fieldname": "rate",
-                "derived_value": canon(rc["derived"]),
-                "requested_value": canon(rc["intended"]),
-                "stored_value": canon(rc["stored"]),
-                "is_numeric": 1,
-                "derived_num": rc["derived"],
-                "requested_num": rc["intended"],
-                "stored_num": rc["stored"],
-                "value_delta": rc["stored"] - rc["derived"],
-                "drift": rc["drift"],
-                "drift_delta": rc["drift_delta"],
-                "drift_note": rc["drift_note"],
-                "reason": rc["reason"] or "(no reason: recorded because the stored value drifted)",
-                "intent": "bill",
-                "actor": "endpoint:bill_intent",
-                "actor_kind": "Agent",
-                "actor_user": frappe.session.user,
-                "recorded_at": frappe.utils.now(),
-                "schema_version": SCHEMA_VERSION,
-                "seq": seq,
-                "prev_hash": prev,
-            }
-            payload["record_hash"] = frappe.utils.sha256_hash(blob_v3(payload, prev, seq))
-
-            log = frappe.get_doc(payload)
-            log.insert(ignore_permissions=True)
-            log.submit()
-            rc["audit_record"] = log.name
-            written.append(log.name)
-        except Exception as e:
-            # THROW. An earlier version caught this, set audit_error, and returned
-            # HTTP 200. That committed an invoice carrying a reasoned override with
-            # no audit record, and told the caller it had succeeded. An override
-            # with no record is the exact defect this entire project exists to
-            # prevent, sitting inside the control meant to prevent it.
+    if not RACED:
+            # Submit. Leaving the document at docstatus 0 was a real hole: the control
+            # checked drift once at insert and then walked away, leaving a draft window in
+            # which anyone with a normal role could edit the rate and submit, while the
+            # audit record still described the draft. Submitting here closes that window
+            # for documents this endpoint creates.
             #
-            # The old comment argued that throwing would roll back audit records
-            # already written in this loop. It would, and that is correct: the
-            # invoice rolls back with them, nothing happened, and the caller
-            # retries. Preserving partial audit records at the cost of an
-            # unrecorded posted override inverts the premise.
-            #
-            # Availability is not the property being defended here. A refused write
-            # is recoverable. A silent unrecorded override is not.
-            frappe.throw("audit write failed, rolling back the invoice with it: "
-                         + str(e)[:300])
+            # It also matters that validate runs AGAIN on submit, so a Pricing Rule can fire
+            # a second time and move a rate after the insert-time reconciliation. That is
+            # why the reconciliation below reads doc.items AFTER the submit, not before.
+            # insert() takes ignore_permissions as a parameter; submit() does not. It reads
+            # the flag off the document. Calling doc.submit() without setting it leaves the
+            # document at docstatus 0 and does NOT raise, so the endpoint reported success
+            # while every invoice it wrote stayed a draft. Silent no-op, exactly the failure
+            # mode this project is about.
+            doc.flags.ignore_permissions = True
+            doc.submit()
+            doc.reload()
 
-    # Breadcrumb on the invoice, so a human opening it in the Desk can see that an
-    # override record exists. Separate try: the authoritative record is already
-    # written and immutable, and losing a convenience pointer must not be reported
-    # as an audit failure.
-    if written:
-        try:
-            frappe.get_doc({"doctype": "Comment", "comment_type": "Info",
-                            "reference_doctype": "Sales Invoice", "reference_name": doc.name,
-                            "content": "Override recorded in Intent Override Log: "
-                                       + ", ".join(written)}).insert(ignore_permissions=True)
-        except Exception:
-            pass
+            # ---------------------------------------------------------------------------
+            # Reconcile intent against what was actually persisted, post-submit.
+            # ---------------------------------------------------------------------------
+            lines = []
+            drift_rows = []
+            for i in intents:
+                stored = doc.items[i["row"]].rate
+                rec = {"row": i["row"], "item": i["item"], "derived": i["derived"],
+                       "intended": i["intended"], "stored": stored, "reason": i["reason"]}
+                # Half-cent tolerance, matching audit.py::_assess_drift: ERPNext rounds to
+                # the document's currency precision, and 0.004 is rounding, not an override
+                # being overridden.
+                gap = stored - i["intended"]
+                if gap < 0:
+                    gap = 0 - gap
+                if gap >= 0.005:
+                    rec["drift"] = "changed"
+                    rec["drift_delta"] = stored - i["intended"]
+                    rec["drift_note"] = ("the saved document holds " + str(stored) + " where "
+                                         + str(i["intended"]) + " was requested. Another ERPNext "
+                                         + "mechanism overrode the recorded decision after the "
+                                         + "intent layer applied it.")
+                    drift_rows.append(rec)
+                else:
+                    rec["drift"] = "none"
+                    rec["drift_delta"] = 0.0
+                    rec["drift_note"] = None
+                lines.append(rec)
 
-    frappe.response["message"] = {"name": doc.name, "grand_total": doc.grand_total,
-                                  "lines": lines, "drift_detected": len(drift_rows),
-                                  "audit_records": written, "audit_error": audit_error,
-                                  "replayed": False}
+
+            def canon(v):
+                # Mirrors harness/audit.py::_canon for the value types this path produces.
+                if v is None:
+                    return ""
+                if v is True:
+                    return "true"
+                if v is False:
+                    return "false"
+                return str(v)
+
+
+            def blob_v3(payload, prev_hash, seq):
+                parts = ["iol", "v3", str(seq), prev_hash]
+                for k in HASHED_FIELDS:
+                    val = canon(payload.get(k))
+                    parts.append(k + "=" + str(len(val)) + ":" + val)
+                return "|".join(parts)
+
+
+            # ---------------------------------------------------------------------------
+            # Write one Intent Override Log record per override. Same doctype, same chain,
+            # same immutability (insert then submit) as the library path.
+            # ---------------------------------------------------------------------------
+            written = []
+            # Retained in the response for shape stability, but it can no longer be set:
+            # a failed audit write now throws and rolls the invoice back.
+            audit_error = None
+            for rc in lines:
+                if not rc["reason"] and rc["drift"] == "none":
+                    continue
+                try:
+                    head = frappe.get_all(AUDIT_DOCTYPE, fields=["seq", "record_hash"],
+                                          order_by="seq desc", limit_page_length=1)
+                    if head:
+                        seq = (head[0].get("seq") or 0) + 1
+                        prev = head[0].get("record_hash") or GENESIS
+                    else:
+                        seq = 1
+                        prev = GENESIS
+
+                    payload = {
+                        "doctype": AUDIT_DOCTYPE,
+                        "target_doctype": "Sales Invoice",
+                        "target_name": doc.name,
+                        # int() on purpose: docstatus is an IntEnum in Frappe 16 and str()
+                        # of an enum is not str() of an int, which would break the hash.
+                        "target_docstatus": int(doc.docstatus),
+                        "target_posting_date": str(doc.posting_date),
+                        "target_company": doc.company,
+                        "row_idx": rc["row"],
+                        "fieldname": "rate",
+                        "derived_value": canon(rc["derived"]),
+                        "requested_value": canon(rc["intended"]),
+                        "stored_value": canon(rc["stored"]),
+                        "is_numeric": 1,
+                        "derived_num": rc["derived"],
+                        "requested_num": rc["intended"],
+                        "stored_num": rc["stored"],
+                        "value_delta": rc["stored"] - rc["derived"],
+                        "drift": rc["drift"],
+                        "drift_delta": rc["drift_delta"],
+                        "drift_note": rc["drift_note"],
+                        "reason": rc["reason"] or "(no reason: recorded because the stored value drifted)",
+                        "intent": "bill",
+                        "actor": "endpoint:bill_intent",
+                        "actor_kind": "Agent",
+                        "actor_user": frappe.session.user,
+                        "recorded_at": frappe.utils.now(),
+                        "schema_version": SCHEMA_VERSION,
+                        "seq": seq,
+                        "prev_hash": prev,
+                    }
+                    payload["record_hash"] = frappe.utils.sha256_hash(blob_v3(payload, prev, seq))
+
+                    log = frappe.get_doc(payload)
+                    log.insert(ignore_permissions=True)
+                    log.submit()
+                    rc["audit_record"] = log.name
+                    written.append(log.name)
+                except Exception as e:
+                    # THROW. An earlier version caught this, set audit_error, and returned
+                    # HTTP 200. That committed an invoice carrying a reasoned override with
+                    # no audit record, and told the caller it had succeeded. An override
+                    # with no record is the exact defect this entire project exists to
+                    # prevent, sitting inside the control meant to prevent it.
+                    #
+                    # The old comment argued that throwing would roll back audit records
+                    # already written in this loop. It would, and that is correct: the
+                    # invoice rolls back with them, nothing happened, and the caller
+                    # retries. Preserving partial audit records at the cost of an
+                    # unrecorded posted override inverts the premise.
+                    #
+                    # Availability is not the property being defended here. A refused write
+                    # is recoverable. A silent unrecorded override is not.
+                    frappe.throw("audit write failed, rolling back the invoice with it: "
+                                 + str(e)[:300])
+
+            # Breadcrumb on the invoice, so a human opening it in the Desk can see that an
+            # override record exists. Separate try: the authoritative record is already
+            # written and immutable, and losing a convenience pointer must not be reported
+            # as an audit failure.
+            if written:
+                try:
+                    frappe.get_doc({"doctype": "Comment", "comment_type": "Info",
+                                    "reference_doctype": "Sales Invoice", "reference_name": doc.name,
+                                    "content": "Override recorded in Intent Override Log: "
+                                               + ", ".join(written)}).insert(ignore_permissions=True)
+                except Exception:
+                    pass
+
+            frappe.response["message"] = {"name": doc.name, "grand_total": doc.grand_total,
+                                          "lines": lines, "drift_detected": len(drift_rows),
+                                          "audit_records": written, "audit_error": audit_error,
+                                          "replayed": False}

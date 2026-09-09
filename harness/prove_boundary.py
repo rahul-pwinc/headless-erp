@@ -208,12 +208,18 @@ def main() -> int:
     cinv = admin.call("frappe.client.get_list", doctype="Sales Invoice",
                       filters={"intent_idempotency_key": ckey},
                       fields=["name"], limit_page_length=0) or []
-    cok = len(cinv) == 1
-    print(f"   {'ok  ' if cok else 'FAIL'} six simultaneous sends of one key -> one invoice")
+    # Six 200s, one invoice, five replayed. An earlier version accepted one 200
+    # and five 500s as a pass, which is safe but not integrable: a client that
+    # treats 500 as fatal reports failure for a write that succeeded.
+    all_ok = all(c == 200 for c in codes)
+    cok = len(cinv) == 1 and all_ok
+    print(f"   {'ok  ' if cok else 'FAIL'} six simultaneous sends of one key")
     print(f"        invoices={len(cinv)}  responses={codes}")
-    if not cok:
+    if len(cinv) != 1:
         print("        a duplicate got through: the unique index is not holding")
-    results.append(("idempotent under concurrency", cok))
+    if not all_ok:
+        print("        the race losers got errors, not replays: not integrable")
+    results.append(("idempotent under concurrency, all callers get an answer", cok))
 
     passed = sum(1 for _, p in results if p)
     print(f"\n{'='*66}\n{passed}/{len(results)} boundary checks passed")

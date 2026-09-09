@@ -36,7 +36,43 @@ SCRIPT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "server_scripts", "bill_intent.py")
 
 
+IDEMPOTENCY_FIELD = "intent_idempotency_key"
+
+
+def ensure_idempotency_field(client: FrappeClient) -> None:
+    """Create the Custom Field the idempotency guarantee rests on.
+
+    This was made by hand during development and provisioned by nothing, so a
+    fresh clone had no field and no unique index: the endpoint would fail on an
+    unknown fieldname and there would be nothing for the database to settle a
+    race with. The proof passed only on the machine that had been hand-edited,
+    which is the exact failure the fresh-clone rule exists to catch.
+
+    `unique=1` is the load-bearing part. The endpoint's check-then-insert has a
+    window; the index is what closes it.
+    """
+    name = f"Sales Invoice-{IDEMPOTENCY_FIELD}"
+    if client.exists("Custom Field", name):
+        f = client.get_doc("Custom Field", name)
+        if not f.get("unique"):
+            client.call("frappe.client.set_value", doctype="Custom Field",
+                        name=name, fieldname="unique", value=1)
+            print("  idemp  : field existed without unique=1, corrected")
+        else:
+            print("  idemp  : Custom Field exists with unique=1")
+        return
+    client.insert({
+        "doctype": "Custom Field", "dt": "Sales Invoice",
+        "fieldname": IDEMPOTENCY_FIELD, "label": "Intent Idempotency Key",
+        "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1,
+        "insert_after": "remarks",
+    })
+    print(f"  idemp  : created Custom Field {IDEMPOTENCY_FIELD} (unique=1)")
+
+
 def ensure(client: FrappeClient) -> dict:
+    ensure_idempotency_field(client)
+
     if not client.exists("Role", ROLE):
         client.insert({"doctype": "Role", "role_name": ROLE, "desk_access": 0})
         print(f"  role   : created {ROLE}")

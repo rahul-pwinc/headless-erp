@@ -175,7 +175,7 @@ Measured runtimes against a local stack on this machine (2026-09-08):
 | `make contract` | ~5s | 10 cases. **Hit a transient `QueryDeadlockError` on `tabSeries` on the first attempt** — a MariaDB naming-series race, not a code bug; retried immediately and passed 10/10. If this happens, just re-run. |
 | `make corpus` | ~25s | 52 scenarios |
 | `make data` | ~55s | see above |
-| `make boundary` | ~5s | provisions the role/user/Server Script, then runs 11 checks; verified 11/11 (2026-09-08) |
+| `make boundary` | ~5s | provisions the role/user/Server Script, then runs 14 checks; verified 14/14 (2026-09-08) |
 | `make simulate` | ~6 min | 1,000 invoices written twice (naive + intent); the committed `reports/clean/simulation.json` is a fresh-clone run (244s). A 250-invoice smoke test (~78s) was also run during this pass to verify the target mechanically works, then the original 1,000-invoice `reports/simulation.json` was restored so the committed figures weren't disturbed. |
 
 ### The enforcement boundary, in one run
@@ -194,7 +194,7 @@ the repo, because it doesn't trust any client-side code at all:
      override with a reason                -> allowed, recorded
      item with no resolvable price         -> REFUSED
 
-11/11 boundary checks passed
+14/14 boundary checks passed
 ```
 
 Case 2 is the point of this section: it is not merely that the intent layer

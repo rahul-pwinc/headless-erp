@@ -52,7 +52,14 @@ def build_master_data(client, df, n_skus, n_customers):
                            "is_stock_item": 0})
             client.insert({"doctype": "Item Price", "item_code": code,
                            "price_list": PRICE_LIST,
-                           "price_list_rate": round(float(listprice[sku]), 2)})
+                           "price_list_rate": round(float(listprice[sku]), 2),
+                           # Pin it. ERPNext defaults valid_from to the creation
+                           # date, so prices built today are not valid for a
+                           # replay posting in the past and the intent path
+                           # refuses to guess a rate. Same bug as the fixtures
+                           # had; this module builds its own masters and did
+                           # not get the fix.
+                           "valid_from": "2020-01-01"})
             made_i += 1
         except FrappeError as e:
             print(f"    item {code} skipped: {str(e)[:80]}")
@@ -111,14 +118,27 @@ def main() -> int:
         if rows.empty:
             continue
         cust = f"OR-CUST-{int(rows.CustomerID.iloc[0])}"
-        hdr = {"customer": cust, "company": company, "currency": "INR",
-               "conversion_rate": 1, "selling_price_list": PRICE_LIST,
-               "price_list_currency": "INR", "plc_conversion_rate": 1,
-               "posting_date": "2026-09-07", "due_date": "2026-10-07",
-               "update_stock": 0}
+        # Two headers on purpose. The naive caller supplies conversion_rate
+        # because that is what a naive caller does, and it is the behaviour this
+        # replay exists to contrast. The intent caller must not: the contract
+        # refuses it (an exchange rate is a published fact), and the server
+        # derives it.
+        #
+        # These were one shared dict until a fresh-clone run caught it. When
+        # conversion_rate joined the refused set, the intent half of this replay
+        # started refusing all 1,000 invoices, and the committed
+        # reports/simulation.json went on claiming intent_written: 1000 from a
+        # run several commits earlier. Nothing failed loudly; the report simply
+        # stopped being true.
+        base = {"customer": cust, "company": company, "currency": "INR",
+                "selling_price_list": PRICE_LIST, "price_list_currency": "INR",
+                "posting_date": "2026-09-07", "due_date": "2026-10-07",
+                "update_stock": 0}
+        naive_hdr = {**base, "conversion_rate": 1, "plc_conversion_rate": 1}
+        hdr = base
 
         # ---- naive caller: posts the real price straight into the row --------
-        naive_doc = {**hdr, "doctype": "Sales Invoice", "items": [
+        naive_doc = {**naive_hdr, "doctype": "Sales Invoice", "items": [
             {"item_code": f"OR-{r.StockCode}", "qty": float(r.Quantity),
              "rate": float(r.Price)} for r in rows.itertuples()]}
         try:
@@ -169,6 +189,12 @@ def main() -> int:
             print(f"  {done}/{a.invoices} invoices  ({time.time()-t0:.0f}s)")
 
     elapsed = time.time() - t0
+    # A replay in which one whole path never ran is not a replay. This exact
+    # failure shipped: intent_refused was 1,000 and the report still looked
+    # plausible because every other counter was populated by the naive half.
+    if stats["intent_written"] == 0 and done:
+        print(f"\n  THE INTENT PATH NEVER RAN. {stats['intent_refused']} refused, "
+              f"{stats['intent_failed']} errored. This report compares nothing.")
     print("\n" + "=" * 70)
     for k in sorted(stats):
         print(f"  {k:32} {stats[k]:>8,}")

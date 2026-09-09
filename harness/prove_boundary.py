@@ -4,7 +4,7 @@ import html, json, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import requests
 from client import FrappeClient, FrappeError
-from enforce import ensure, AGENT_USER, AGENT_PASSWORD
+from enforce import ensure, AGENT_USER, AGENT_PASSWORD, SCRIPT_PATH
 
 URL = os.environ.get("ERPNEXT_URL", "http://localhost:8080")
 HDR = {"customer": "Headless Test Customer", "company": "Headless Test Co",
@@ -97,6 +97,55 @@ def main() -> int:
     if scoped:
         print(f"        refused: {srv_msg(rr.json())[:90]}")
     results.append(("out-of-scope company refused", scoped))
+
+    rr = s.post(f"{URL}/api/method/bill_intent",
+                json={**HDR, "customer": "Some Other Customer",
+                      "items": [{"item_code": "HL-WIDGET-001", "qty": 4}], "overrides": []})
+    party_scoped = rr.status_code != 200
+    print(f"   {'ok  ' if party_scoped else 'FAIL'} billing a customer this identity was not provisioned for")
+    if party_scoped:
+        print(f"        refused: {srv_msg(rr.json())[:90]}")
+    results.append(("out-of-scope party refused", party_scoped))
+
+    # ---- forced audit failure -------------------------------------------
+    # The endpoint throws when the audit write fails, so an override can never
+    # post without a record. That is a claim about a failure path, and an
+    # untested failure path is what the original hole was: the old code caught
+    # the exception, set audit_error, and returned 200 with an unrecorded
+    # override committed. So force it.
+    #
+    # Break the audit doctype name in a deployed copy of the script, call it
+    # with an override, and assert both that the call fails AND that no invoice
+    # survives. Restore the real script afterwards.
+    print("\n5. forced audit failure rolls the invoice back")
+    good = open(SCRIPT_PATH).read().replace("__ALLOWED_COMPANY__", HDR["company"])
+    broken = good.replace('AUDIT_DOCTYPE = "Intent Override Log"',
+                          'AUDIT_DOCTYPE = "Intent Override Log DOES NOT EXIST"')
+    assert broken != good, "failed to break the audit doctype name"
+    before = len(admin.call("frappe.client.get_list", doctype="Sales Invoice",
+                            fields=["name"], limit_page_length=0) or [])
+    admin.call("frappe.client.set_value", doctype="Server Script",
+               name="bill_intent", fieldname="script", value=broken)
+    try:
+        rr = s.post(f"{URL}/api/method/bill_intent", json={
+            **HDR, "items": [{"item_code": "HL-WIDGET-001", "qty": 4}],
+            "overrides": [{"row": 0, "field": "rate", "value": 1.0,
+                           "reason": "forced audit failure probe"}]})
+        errored = rr.status_code != 200
+        after = len(admin.call("frappe.client.get_list", doctype="Sales Invoice",
+                               fields=["name"], limit_page_length=0) or [])
+        rolled_back = after == before
+        ok = errored and rolled_back
+        print(f"   {'ok  ' if ok else 'FAIL'} audit write forced to fail")
+        print(f"        response      : {rr.status_code}"
+              + ("" if errored else "   <-- returned success with no audit record"))
+        print(f"        invoices before/after : {before}/{after}"
+              + ("" if rolled_back else "   <-- an invoice survived"))
+        results.append(("forced audit failure rolls back", ok))
+    finally:
+        admin.call("frappe.client.set_value", doctype="Server Script",
+                   name="bill_intent", fieldname="script", value=good)
+        print("        (real script restored)")
 
     passed = sum(1 for _, p in results if p)
     print(f"\n{'='*66}\n{passed}/{len(results)} boundary checks passed")

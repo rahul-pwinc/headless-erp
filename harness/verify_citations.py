@@ -73,7 +73,89 @@ def main() -> int:
           f"against frappe {vers['frappe']} / erpnext {vers['erpnext']}")
     if bad:
         print("\nA wrong line number costs a reader their trust in every other number.")
-    return 1 if bad else 0
+    stale = check_counts(fix="--fix" in sys.argv)
+    return 1 if (bad or stale) else 0
+
+
+# ---------------------------------------------------------------------------
+# Published counts must match the artifacts.
+#
+# Three review rounds in a row flagged stale numbers in the docs, and the round
+# that was meant to fix them by hand introduced a mangled sentence and left
+# eleven wrong figures live. Hand-fixing does not converge. So the counts are
+# read out of the JSON reports and every doc is checked against them.
+#
+# A number in a document that disagrees with the artifact behind it is worse
+# than no number: a reader who catches one stops trusting the rest.
+# ---------------------------------------------------------------------------
+import glob
+import json
+import os
+
+DOCS = ["README.md", "Makefile"] + sorted(glob.glob("docs/*.md"))
+
+# keyword that must appear on the line -> (report file, numerator key, denominator key)
+COUNT_RULES = [
+    (r"corpus|scenario", "reports/clean/corpus.json", "passed", "total"),
+    (r"contract|intent proof|cases behaved", "reports/clean/intent_proof.json", "passed", "total"),
+    (r"boundary", "reports/clean/boundary.json", "passed", "total"),
+]
+
+
+def _load(path: str) -> dict | None:
+    try:
+        return json.load(open(path))
+    except Exception:
+        return None
+
+
+def check_counts(fix: bool = False) -> int:
+    print("\npublished counts vs artifacts")
+    problems = 0
+    truth = []
+    for kw, path, npk, dpk in COUNT_RULES:
+        rep = _load(path)
+        if not rep:
+            print(f"  SKIP {path} missing")
+            continue
+        truth.append((kw, int(rep[npk]), int(rep[dpk]), path))
+        print(f"  {os.path.basename(path):22} -> {rep[npk]}/{rep[dpk]}")
+
+    frac = re.compile(r"\b(\d{1,3})\s*/\s*(\d{1,3})\b")
+    edits: dict[str, list] = {}
+    for doc in DOCS:
+        if not os.path.exists(doc):
+            continue
+        for lineno, line in enumerate(open(doc, encoding="utf-8"), 1):
+            for kw, good_n, good_d, path in truth:
+                if not re.search(kw, line, re.I):
+                    continue
+                for m in frac.finditer(line):
+                    n, d = int(m.group(1)), int(m.group(2))
+                    # only judge fractions that look like this metric's shape
+                    if d not in (good_d, good_n) and abs(d - good_d) > 6:
+                        continue
+                    if (n, d) != (good_n, good_d):
+                        problems += 1
+                        print(f"  WRONG {doc}:{lineno}  says {n}/{d}, "
+                              f"{os.path.basename(path)} says {good_n}/{good_d}")
+                        print(f"        {line.strip()[:100]}")
+                        if fix:
+                            edits.setdefault(doc, []).append(
+                                (lineno, m.group(0), f"{good_n}/{good_d}"))
+    if fix and edits:
+        for doc, changes in edits.items():
+            lines = open(doc, encoding="utf-8").read().split("\n")
+            for lineno, old, new in changes:
+                lines[lineno - 1] = lines[lineno - 1].replace(old, new)
+            open(doc, "w", encoding="utf-8").write("\n".join(lines))
+            print(f"  fixed {len(changes)} in {doc}")
+        print("  re-run without --fix to confirm")
+    if not problems:
+        print("  ok   every published count matches its artifact")
+    return 0 if fix else problems
+
+
 
 
 if __name__ == "__main__":

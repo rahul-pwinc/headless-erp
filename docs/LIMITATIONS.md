@@ -6,6 +6,32 @@ boundary so that a reader does not have to discover it themselves.
 
 Claim numbers refer to [CLAIMS.md](CLAIMS.md).
 
+## The library path still leaves drafts
+
+`harness/intent.py` accepts `submit=False`, and the corpus uses it (for example
+`grd-04-draft-posts-nothing`, which exists to assert that a draft posts nothing).
+Those documents sit at `docstatus 0`.
+
+That matters because of what it means for the audit record. The library path
+reconciles derived against stored at insert. If a document is left as a draft,
+anyone with a normal ERPNext role can edit the rate afterwards and submit it, and
+the override record still describes the document as it was at insert. **The
+record is accurate about a state that no longer exists.**
+
+The enforced endpoint does not have this window: it submits inside the same
+request, reconciles post-submit, and `prove_boundary.py` fails if the document
+comes back at anything other than `docstatus 1`.
+
+We have not closed it on the library path, deliberately. The library path is a
+client-side convenience with no permission boundary behind it, so a caller who
+wants to bypass the reconciliation can simply not call it. Adding a submit-time
+guard there would suggest a guarantee the layer cannot make. **The library path
+is advisory. Only the endpoint is a control**, and that distinction is the point
+of having both.
+
+If you need the guarantee, use the endpoint.
+
+
 ## Concurrency: safe, not available
 
 Measured, not assumed. `make concurrency` fires 20 simultaneous overrides through
@@ -159,7 +185,7 @@ all three files.
 
 ## 6. The enforcement boundary is narrow
 
-`reports/boundary.json` records 8 of 8 checks passing. What that does and does
+`reports/boundary.json` records 10 of 10 checks passing. What that does and does
 not cover:
 
 - **One intent.** `bill_intent` is the only Server Script installed

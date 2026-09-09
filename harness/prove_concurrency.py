@@ -63,7 +63,16 @@ def one_call(i: int, fx: dict, cookies: dict) -> dict:
     if r.status_code != 200:
         return {"i": i, "ok": False, "err": r.text[:120]}
     m = r.json().get("message", {})
-    return {"i": i, "ok": True, "invoice": m.get("name"), "audit": m.get("audit")}
+    # audit_error is read, not ignored. The endpoint used to return 200 with it
+    # set, meaning a posted override with no audit record. It now throws instead,
+    # but the test asserts the absence rather than assuming the fix.
+    # The endpoint returns the created record names in `audit_records`, and the
+    # per-line name under lines[].audit_record. Reading a key that does not
+    # exist made every success look unrecorded on the first run of this check.
+    return {"i": i, "ok": True, "invoice": m.get("name"),
+            "audit": m.get("audit_records") or [],
+            "audit_error": m.get("audit_error"),
+            "lines": m.get("lines") or []}
 
 
 def main() -> int:
@@ -118,12 +127,34 @@ def main() -> int:
     #   AVAILABILITY  did concurrent writes actually succeed?
     #
     # They have opposite answers here and both are worth stating.
-    integrity = not dupes and not gaps and not forks and chain.get("ok") is True
+    # Every HTTP 200 must have produced exactly one audit record. "Integrity
+    # held" previously meant only that the records which landed chained
+    # correctly. It said nothing about whether every posted override HAD a
+    # record, which is the property that actually matters.
+    after = len(rows)
+    delta = after - len(before)
+    audit_errors = [r for r in ok if r.get("audit_error")]
+    missing_record = [r for r in ok if not r.get("audit")]  # audit_records empty
+
+    print(f"\n  audit records created : {delta} for {len(ok)} successful calls")
+    print(f"  responses carrying audit_error : {len(audit_errors)}")
+    print(f"  successful calls with no audit record : {len(missing_record)}")
+
+    every_override_recorded = (delta == len(ok)
+                               and not audit_errors
+                               and not missing_record)
+    if not every_override_recorded:
+        print("  AN OVERRIDE POSTED WITHOUT A RECORD. That is the defect this")
+        print("  project exists to prevent, inside the control meant to prevent it.")
+
+    integrity = (not dupes and not gaps and not forks
+                 and chain.get("ok") is True
+                 and every_override_recorded)
     availability = len(ok) == a.n
     deadlocks = sum(1 for b in bad if "Deadlock" in (b.get("err") or ""))
 
     print(f"\n  INTEGRITY    : {'HELD' if integrity else 'BROKEN'} "
-          f"(no duplicate seq, no gaps, no forks, verify_chain ok)")
+          f"(chain contiguous and verifiable, AND one audit record per posted override)")
     print(f"  AVAILABILITY : {len(ok)}/{a.n} writes landed"
           + (f", {deadlocks} rejected with QueryDeadlockError" if deadlocks else ""))
     if integrity and not availability:
@@ -138,6 +169,9 @@ def main() -> int:
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     json.dump({"integrity_held": integrity, "availability_full": availability,
+               "audit_records_created": delta, "responses_with_audit_error": len(audit_errors),
+               "successes_missing_a_record": len(missing_record),
+               "every_override_recorded": every_override_recorded,
                "attempted": a.n, "succeeded": len(ok), "failed": len(bad),
                "records": len(rows), "duplicate_seq": dupes, "seq_gaps": gaps,
                "forks": forks, "verify_chain": chain, "clean": clean,

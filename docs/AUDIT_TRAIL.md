@@ -604,7 +604,7 @@ a role (`Agent Writer`) with read-only permission on 24 master doctypes and
 Frappe Server Script API endpoint (`bill_intent`) that runs with elevated
 permission and enforces derive-or-refuse server-side. For that identity, the
 intent layer is not advice — it is the only door. Verified by
-`harness/prove_boundary.py`, 8/8, re-run for this document:
+`harness/prove_boundary.py`, 11/11, re-run for this document:
 
 ```
 1. direct write, unconstrained identity
@@ -872,7 +872,7 @@ writer that took `stored` from its caller would reintroduce the exact defect
 # the suites — these now write override records as a side effect of running
 python harness/prove_intent.py                      # the contract,        10/10
 python harness/run_corpus.py                        # the use-case corpus, 39/39
-python harness/prove_boundary.py                    # the enforced path,    8/8
+python harness/prove_boundary.py                    # the enforced path,    11/11
 
 # the audit trail itself
 python harness/demo_audit.py                        # write, drift, query, immutability, chain
@@ -918,7 +918,7 @@ Three actors, two write paths, one chain. `harness:prove_intent.py` and
 came from inside RestrictedPython. Note that the endpoint's row is `draft` and
 the library rows are `submitted` — the asymmetry described at the end of §10.
 
-Four records for 68 checks across three suites (10 + 50 + 8) is the right order of
+Four records for 68 checks across three suites (10 + 52 + 10) is the right order of
 magnitude, and worth reading correctly: only `rate` can produce a record (§2b),
 and most scenarios test refusals, which produce none because nothing happened.
 

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-09T06:38:50.983553+00:00",
+  "generated_at": "2026-09-09T06:45:28.561819+00:00",
   "erpnext_version": "v16.34.1",
   "passed": 49,
   "total": 52,
@@ -45,7 +45,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00265"
+        "Sales Invoice/ACC-SINV-2026-00312"
       ],
       "notes": []
     },
@@ -56,7 +56,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00266"
+        "Sales Invoice/ACC-SINV-2026-00313"
       ],
       "notes": []
     },
@@ -67,7 +67,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00267"
+        "Sales Invoice/ACC-SINV-2026-00314"
       ],
       "notes": []
     },
@@ -78,7 +78,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00268"
+        "Sales Invoice/ACC-SINV-2026-00315"
       ],
       "notes": []
     },
@@ -89,7 +89,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00269"
+        "Sales Invoice/ACC-SINV-2026-00316"
       ],
       "notes": []
     },
@@ -100,7 +100,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00270"
+        "Sales Invoice/ACC-SINV-2026-00317"
       ],
       "notes": []
     },
@@ -111,7 +111,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Quotation/SAL-QTN-2026-00093"
+        "Quotation/SAL-QTN-2026-00096"
       ],
       "notes": []
     },
@@ -122,7 +122,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Order/SAL-ORD-2026-00074"
+        "Sales Order/SAL-ORD-2026-00075"
       ],
       "notes": []
     },
@@ -133,7 +133,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Order/PUR-ORD-2026-00071"
+        "Purchase Order/PUR-ORD-2026-00072"
       ],
       "notes": []
     },
@@ -144,7 +144,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Material Request/MAT-MR-2026-00074"
+        "Material Request/MAT-MR-2026-00075"
       ],
       "notes": []
     },
@@ -155,7 +155,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Quotation/SAL-QTN-2026-00094"
+        "Quotation/SAL-QTN-2026-00097"
       ],
       "notes": []
     },
@@ -166,8 +166,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00271",
-        "Payment Entry/ACC-PAY-2026-00065"
+        "Sales Invoice/ACC-SINV-2026-00318",
+        "Payment Entry/ACC-PAY-2026-00073"
       ],
       "notes": []
     },
@@ -178,8 +178,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00272",
-        "Payment Entry/ACC-PAY-2026-00066"
+        "Sales Invoice/ACC-SINV-2026-00319",
+        "Payment Entry/ACC-PAY-2026-00074"
       ],
       "notes": []
     },
@@ -190,8 +190,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00273",
-        "Payment Entry/ACC-PAY-2026-00067"
+        "Sales Invoice/ACC-SINV-2026-00320",
+        "Payment Entry/ACC-PAY-2026-00075"
       ],
       "notes": []
     },
@@ -202,8 +202,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00274",
-        "Payment Entry/ACC-PAY-2026-00068"
+        "Sales Invoice/ACC-SINV-2026-00321",
+        "Payment Entry/ACC-PAY-2026-00076"
       ],
       "notes": []
     },
@@ -214,10 +214,10 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00275"
+        "Sales Invoice/ACC-SINV-2026-00322"
       ],
       "notes": [
-        "refused: collect: allocating 5000.0 to ACC-SINV-2026-00275 exceeds its outstanding of 1000.0."
+        "refused: collect: allocating 5000.0 to ACC-SINV-2026-00322 exceeds its outstanding of 1000.0."
       ]
     },
     {
@@ -227,10 +227,10 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00276"
+        "Sales Invoice/ACC-SINV-2026-00323"
       ],
       "notes": [
-        "refused: collect: outstanding is derived from ACC-SINV-2026-00276, not supplied."
+        "refused: collect: outstanding is derived from ACC-SINV-2026-00323, not supplied."
       ]
     },
     {
@@ -240,9 +240,9 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00277",
-        "Payment Entry/ACC-PAY-2026-00069",
-        "Payment Entry/ACC-PAY-2026-00070"
+        "Sales Invoice/ACC-SINV-2026-00324",
+        "Payment Entry/ACC-PAY-2026-00077",
+        "Payment Entry/ACC-PAY-2026-00078"
       ],
       "notes": []
     },
@@ -253,7 +253,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00103"
+        "Purchase Invoice/ACC-PINV-2026-00108"
       ],
       "notes": []
     },
@@ -264,7 +264,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00104"
+        "Purchase Invoice/ACC-PINV-2026-00109"
       ],
       "notes": []
     },
@@ -275,8 +275,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00105",
-        "Payment Entry/ACC-PAY-2026-00071"
+        "Purchase Invoice/ACC-PINV-2026-00110",
+        "Payment Entry/ACC-PAY-2026-00079"
       ],
       "notes": []
     },
@@ -287,8 +287,8 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00106",
-        "Payment Entry/ACC-PAY-2026-00072"
+        "Purchase Invoice/ACC-PINV-2026-00111",
+        "Payment Entry/ACC-PAY-2026-00080"
       ],
       "notes": []
     },
@@ -299,10 +299,10 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Purchase Invoice/ACC-PINV-2026-00107"
+        "Purchase Invoice/ACC-PINV-2026-00112"
       ],
       "notes": [
-        "refused: pay: allocating 9999.0 to ACC-PINV-2026-00107 exceeds its outstanding of 480.0."
+        "refused: pay: allocating 9999.0 to ACC-PINV-2026-00112 exceeds its outstanding of 480.0."
       ]
     },
     {
@@ -345,7 +345,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00278"
+        "Sales Invoice/ACC-SINV-2026-00325"
       ],
       "notes": []
     },
@@ -400,7 +400,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00279"
+        "Sales Invoice/ACC-SINV-2026-00326"
       ],
       "notes": []
     },
@@ -455,7 +455,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00280"
+        "Sales Invoice/ACC-SINV-2026-00327"
       ],
       "notes": []
     },
@@ -499,7 +499,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00281"
+        "Sales Invoice/ACC-SINV-2026-00328"
       ],
       "notes": []
     },
@@ -523,7 +523,7 @@
         "line_field: row 0 stock_qty expected 70, got 49.0"
       ],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00282 (raw, bypassed the intent layer)"
+        "Sales Invoice/ACC-SINV-2026-00329 (raw, bypassed the intent layer)"
       ],
       "notes": []
     },
@@ -536,7 +536,7 @@
         "item_price: expected exists=False for HL-PRICE-MUTATION-001/Standard Selling, found rate 4321.0"
       ],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00283 (raw, bypassed the intent layer)"
+        "Sales Invoice/ACC-SINV-2026-00330 (raw, bypassed the intent layer)"
       ],
       "notes": []
     },
@@ -580,7 +580,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Quotation/SAL-QTN-2026-00095"
+        "Quotation/SAL-QTN-2026-00098"
       ],
       "notes": []
     },
@@ -591,7 +591,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00284"
+        "Sales Invoice/ACC-SINV-2026-00331"
       ],
       "notes": []
     },
@@ -602,7 +602,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00285"
+        "Sales Invoice/ACC-SINV-2026-00332"
       ],
       "notes": []
     },
@@ -615,7 +615,7 @@
         "line_field: row 0 base_rate expected 22500, got 250.0"
       ],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00286 (raw, bypassed the intent layer)"
+        "Sales Invoice/ACC-SINV-2026-00333 (raw, bypassed the intent layer)"
       ],
       "notes": []
     },
@@ -626,7 +626,7 @@
       "passed": true,
       "failures": [],
       "docs": [
-        "Sales Invoice/ACC-SINV-2026-00287 (raw, bypassed the intent layer)"
+        "Sales Invoice/ACC-SINV-2026-00334 (raw, bypassed the intent layer)"
       ],
       "notes": []
     }

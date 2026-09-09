@@ -1,6 +1,6 @@
 {
-  "passed": 9,
-  "total": 9,
+  "passed": 11,
+  "total": 11,
   "checks": [
     {
       "check": "admin direct write allowed",
@@ -36,6 +36,14 @@
     },
     {
       "check": "out-of-scope company refused",
+      "pass": true
+    },
+    {
+      "check": "out-of-scope party refused",
+      "pass": true
+    },
+    {
+      "check": "forced audit failure rolls back",
       "pass": true
     }
   ]

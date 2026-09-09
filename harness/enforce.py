@@ -68,8 +68,17 @@ def ensure(client: FrappeClient) -> dict:
     # company, so the elevation inside it is bounded to one tenant.
     company = (client.call("frappe.client.get_list", doctype="Company",
                            fields=["name"], limit_page_length=0) or [{}])[0].get("name", "")
-    script = open(SCRIPT_PATH).read().replace("__ALLOWED_COMPANY__", company)
-    print(f"  scope  : endpoint bound to company {company!r}")
+    # Party scope. A real deployment provisions the customers this identity is
+    # allowed to transact for; here that is the fixture customer. Empty would
+    # mean "any customer", which is the wrong default and is documented as such.
+    parties = [p["name"] for p in (client.call(
+        "frappe.client.get_list", doctype="Customer",
+        filters={"customer_name": ["like", "Headless%"]},
+        fields=["name"], limit_page_length=0) or [])]
+    script = (open(SCRIPT_PATH).read()
+              .replace("__ALLOWED_COMPANY__", company)
+              .replace("__ALLOWED_PARTIES__", "|".join(parties)))
+    print(f"  scope  : company {company!r}, {len(parties)} permitted customer(s)")
     if client.exists("Server Script", "bill_intent"):
         client.call("frappe.client.set_value", doctype="Server Script",
                     name="bill_intent", fieldname="script", value=script)

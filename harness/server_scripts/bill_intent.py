@@ -35,10 +35,21 @@ args = frappe.form_dict
 # allowed company is written in at provisioning time by harness/enforce.py and
 # anything else is refused before a document is built.
 ALLOWED_COMPANY = "__ALLOWED_COMPANY__"
+# Comma-separated allowlist, substituted at provisioning. Empty means every
+# customer, which is the wrong default for a real deployment and is called out
+# in THREAT_MODEL. Scoping company alone was not enough: an identity bound to
+# one company could still bill on behalf of any customer in it.
+ALLOWED_PARTIES = "__ALLOWED_PARTIES__"
 
 if ALLOWED_COMPANY and args.get("company") != ALLOWED_COMPANY:
     frappe.throw("this identity may only bill for " + ALLOWED_COMPANY
                  + ", not " + str(args.get("company")))
+
+if ALLOWED_PARTIES:
+    permitted = ALLOWED_PARTIES.split("|")
+    if args.get("customer") not in permitted:
+        frappe.throw("this identity may only bill the customers it was "
+                     + "provisioned for, not " + str(args.get("customer")))
 
 items = args.get("items") or []
 overrides = args.get("overrides") or []
@@ -175,6 +186,8 @@ def blob_v3(payload, prev_hash, seq):
 # same immutability (insert then submit) as the library path.
 # ---------------------------------------------------------------------------
 written = []
+# Retained in the response for shape stability, but it can no longer be set:
+# a failed audit write now throws and rolls the invoice back.
 audit_error = None
 for rc in lines:
     if not rc["reason"] and rc["drift"] == "none":
@@ -229,13 +242,22 @@ for rc in lines:
         rc["audit_record"] = log.name
         written.append(log.name)
     except Exception as e:
-        # Recorded and returned, never swallowed. The library path cancels the
-        # document when the audit write fails; this path cannot, because the
-        # throw would roll back the whole request transaction including the
-        # audit records already written in this loop — so the caller is told,
-        # loudly, in the response.
-        audit_error = str(e)[:400]
-        rc["audit_error"] = audit_error
+        # THROW. An earlier version caught this, set audit_error, and returned
+        # HTTP 200. That committed an invoice carrying a reasoned override with
+        # no audit record, and told the caller it had succeeded. An override
+        # with no record is the exact defect this entire project exists to
+        # prevent, sitting inside the control meant to prevent it.
+        #
+        # The old comment argued that throwing would roll back audit records
+        # already written in this loop. It would, and that is correct: the
+        # invoice rolls back with them, nothing happened, and the caller
+        # retries. Preserving partial audit records at the cost of an
+        # unrecorded posted override inverts the premise.
+        #
+        # Availability is not the property being defended here. A refused write
+        # is recoverable. A silent unrecorded override is not.
+        frappe.throw("audit write failed, rolling back the invoice with it: "
+                     + str(e)[:300])
 
 # Breadcrumb on the invoice, so a human opening it in the Desk can see that an
 # override record exists. Separate try: the authoritative record is already

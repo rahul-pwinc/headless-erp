@@ -1,15 +1,19 @@
 {
   "integrity_held": true,
   "availability_full": false,
+  "audit_records_created": 3,
+  "responses_with_audit_error": 0,
+  "successes_missing_a_record": 0,
+  "every_override_recorded": true,
   "attempted": 20,
   "succeeded": 3,
   "failed": 17,
-  "records": 40,
+  "records": 48,
   "duplicate_seq": [],
   "seq_gaps": [],
   "forks": [],
   "verify_chain": {
-    "records": 40,
+    "records": 48,
     "tampered": [],
     "broken": [],
     "forked": [],
@@ -17,8 +21,8 @@
     "unverifiable_schema": [],
     "ok": true,
     "head": {
-      "seq": 40,
-      "hash": "1111d4efef11edfb7030e0604d40dddfd5830a51ec75689f52d0686b2d6fe26b"
+      "seq": 48,
+      "hash": "b9c6de208d309c220fa39bf804606f4f4fde7104f9e2dd3825b6aa1379cc298c"
     }
   },
   "clean": true,

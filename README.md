@@ -292,8 +292,8 @@ separately, flagging `DRIFT` when the last two disagree
 | what | result | artifact |
 |---|---|---|
 | contract cases | **10 / 10** | `reports/clean/intent_proof.json` |
-| accounting corpus | **48 / 50** across 9 categories | `reports/clean/corpus.json` |
-| enforcement boundary | **8 / 8** | `reports/clean/boundary.json` |
+| accounting corpus | **49/52** across 9 categories | `reports/clean/corpus.json` |
+| enforcement boundary | **11/11** | `reports/clean/boundary.json` |
 | derivation census | 203 probes, 150 protected, 43 accepted, 10 rejected; 7 fields across 9 doctypes | `reports/clean/census.json` |
 | differential | 0 gaps when `rate` is omitted, 3 when asserted (1,000.00 vs 4.00) | `reports/latest.json` |
 | replay at scale | 1,000 real invoices written twice, 4,380 lines, 1,091 overrides recorded, 0 invariant failures | `reports/simulation.json` |

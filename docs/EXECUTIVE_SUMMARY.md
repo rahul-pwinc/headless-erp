@@ -1,18 +1,15 @@
 # Letting software write to your ledger
 
-One page. Written for a finance or audit reader, not an engineer. Every number
-below has a script in this repository that produces it; nothing here is an
-estimate.
-
----
-
 ## The problem, in one example
 
 An automated system creates a sales invoice for 1,000 US dollars. Your ERP holds
 the correct exchange rate and will use it — but only if the system leaves that
 field blank. If the system fills it in with 1.0, the ERP accepts that number
-without comment. The invoice posts to your ledger at **1,000 in local currency
-instead of 94,460**.
+without comment. At a rate of 90, the invoice posts to your ledger at **1,000 in
+local currency instead of 90,000**.
+
+The multiplier is whatever the rate happens to be that day; the error is the
+whole of it.
 
 Your books balance perfectly. Debits equal credits. Every reconciliation passes.
 Nothing in the record distinguishes this from a correct entry, and no report will
@@ -35,10 +32,12 @@ installation:
   instead without warning. The exchange rate is the most severe. Others include
   the price a customer is charged, the account revenue posts to, and a unit
   conversion that moves warehouse quantities rather than only money.
-- **One of these cannot be typed by a human at all.** The reference price field
-  is read-only on screen. Only an automated caller can set it, and when it does,
-  the discount recorded against it is measured from a baseline that never
-  existed.
+- **One of these cannot be typed by a human, under the default configuration.**
+  The reference price field is read-only on screen unless a setting is turned on
+  that makes it editable. Left at its default, only an automated caller can set
+  it, and when it does, the discount recorded against it is measured from a
+  baseline that never existed. One checkbox makes that no longer true, which is
+  why it is stated with the qualifier rather than as a flat claim.
 - **A working control.** An automated identity is denied permission to write
   invoices directly and can only act through a vetted operation that computes
   every derivable value itself, refuses ten fields outright, and permits a
@@ -91,6 +90,22 @@ company whose automated entries are systematically wrong.
 The distinction between a decision and an omission exists only at the moment of
 writing, and only if something captures it. **That is what this control does, for
 one operation out of eleven, at a throughput we have not yet measured.**
+
+## What we recommend
+
+**Not yet, as this stands.** Do not let automated systems write every transaction
+through this control today: ten of the eleven operations a company runs on are
+not enforced, and we cannot yet tell you what it does to throughput.
+
+**Before you would, three things have to be true, in this order.** The throughput
+number has to exist and be acceptable at your volume. The control has to be a
+packaged, versioned application rather than a script held in the ERP's database.
+And all eleven operations have to be enforced, not one.
+
+**What you can adopt this week, independent of any of that:** reconcile every
+foreign-currency document against the published rate for its posting date. It is
+a report, not a project, it needs nothing from this repository, and on the
+evidence here it is the single highest-value check available to you.
 
 ---
 

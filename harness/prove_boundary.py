@@ -201,10 +201,18 @@ def main() -> int:
         if os.environ.get("ERPNEXT_SITE"):
             t.headers["Host"] = os.environ["ERPNEXT_SITE"]
         rr = t.post(f"{URL}/api/method/bill_intent", json=cpayload)
-        return rr.status_code
+        # Return the body, not just the code. A 200 with an empty body, or with
+        # a different invoice name, would have passed the earlier version of
+        # this check. A status code is not the state.
+        try:
+            return (rr.status_code, rr.json().get("message") or {})
+        except Exception:
+            return (rr.status_code, {})
 
     with _TPE(max_workers=6) as ex:
-        codes = list(ex.map(_fire, range(6)))
+        fired = list(ex.map(_fire, range(6)))
+    codes = [c for c, _ in fired]
+    bodies = [b for _, b in fired]
     cinv = admin.call("frappe.client.get_list", doctype="Sales Invoice",
                       filters={"intent_idempotency_key": ckey},
                       fields=["name"], limit_page_length=0) or []
@@ -212,13 +220,25 @@ def main() -> int:
     # and five 500s as a pass, which is safe but not integrable: a client that
     # treats 500 as fatal reports failure for a write that succeeded.
     all_ok = all(c == 200 for c in codes)
-    cok = len(cinv) == 1 and all_ok
+    names = {b.get("name") for b in bodies}
+    one_name = len(names) == 1 and None not in names
+    replayed = [b.get("replayed") for b in bodies]
+    raced = [b.get("raced") for b in bodies]
+    # Exactly one winner and five that say so.
+    shape_ok = (replayed.count(False) == 1 and replayed.count(True) == 5
+                and raced.count(True) == 5)
+    cok = len(cinv) == 1 and all_ok and one_name and shape_ok
     print(f"   {'ok  ' if cok else 'FAIL'} six simultaneous sends of one key")
     print(f"        invoices={len(cinv)}  responses={codes}")
     if len(cinv) != 1:
         print("        a duplicate got through: the unique index is not holding")
+    print(f"        names={names}  replayed={replayed}  raced={raced}")
     if not all_ok:
         print("        the race losers got errors, not replays: not integrable")
+    if not one_name:
+        print("        responses disagree on the invoice name, or one was empty")
+    if not shape_ok:
+        print("        expected exactly one winner and five replayed:true raced:true")
     results.append(("idempotent under concurrency, all callers get an answer", cok))
 
     passed = sum(1 for _, p in results if p)

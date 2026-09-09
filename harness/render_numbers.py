@@ -116,6 +116,46 @@ def render() -> str:
     return "\n".join(out)
 
 
+EXEC = "docs/EXECUTIVE_SUMMARY.md"
+EBEGIN = "<!-- BEGIN GENERATED BOUNDARY -->"
+EEND = "<!-- END GENERATED BOUNDARY -->"
+
+
+def render_exec_boundary() -> str | None:
+    """The executive page quotes the boundary count in prose.
+
+    That number is hand-typed nowhere else after this: it goes to readers who
+    cannot check it, so it is the last place a stale figure should be able to
+    survive. Generated like the table.
+    """
+    bo = _j("boundary.json")
+    if not bo:
+        return None
+    return f"**{bo['passed']} of {bo['total']} checks pass**"
+
+
+def sync_exec(check: bool) -> int:
+    body = render_exec_boundary()
+    if body is None or not os.path.exists(EXEC):
+        return 0
+    src = open(EXEC, encoding="utf-8").read()
+    if EBEGIN not in src or EEND not in src:
+        return 0
+    head, rest = src.split(EBEGIN, 1)
+    _, tail = rest.split(EEND, 1)
+    new = head + EBEGIN + body + EEND + tail
+    if check:
+        if new != src:
+            print("  EXECUTIVE_SUMMARY boundary count is STALE. Run: make numbers")
+            return 1
+        print("  ok   executive summary boundary count matches the artifact")
+        return 0
+    if new != src:
+        open(EXEC, "w", encoding="utf-8").write(new)
+        print(f"  executive summary boundary count synced: {body}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true")
@@ -130,14 +170,16 @@ def main() -> int:
     new = head + render() + tail
 
     if a.check:
+        rc = 0
         if new != src:
             print("README numbers are STALE. Run: make numbers")
-            return 1
-        print("  ok   README numbers match the artifacts")
-        return 0
+            rc = 1
+        else:
+            print("  ok   README numbers match the artifacts")
+        return rc or sync_exec(check=True)
     open("README.md", "w", encoding="utf-8").write(new)
     print("README Current numbers regenerated from reports/clean/")
-    return 0
+    return sync_exec(check=False)
 
 
 if __name__ == "__main__":

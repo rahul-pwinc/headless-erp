@@ -17,7 +17,12 @@ PRICE_VALID_FROM = "2020-01-01"  # far enough back that no scenario date precede
 LIST_PRICE = 250.0          # the Price List rate the UI would derive
 CUSTOMER = "Headless Test Customer"
 SUPPLIER = "Headless Test Supplier"
-UNPRICED_ITEM = "HL-UNPRICED-001"  # deliberately has no Item Price anywhere
+UNPRICED_ITEM = "HL-UNPRICED-001"
+PR_PROBE_ITEM = "HL-PR-PROBE-001"       # dedicated: carries the probe Pricing Rule
+PR_PROBE_PRICE = 100.0
+PR_PROBE_RULE = "HL PR PROBE 10pct"
+SALES_PERSON = "HL Probe Rep"
+SALES_PERSON_COMMISSION = 2.0  # deliberately has no Item Price anywhere
 BUY_PRICE_LIST = "Standard Buying"
 BUY_PRICE = 120.0
 
@@ -249,6 +254,8 @@ def assert_clean_fixtures(client: FrappeClient) -> list[str]:
                         filters={"disable": 0}, fields=["name", "title"],
                         limit_page_length=0) or []
     for r in rules:
+        if r.get("title") == PR_PROBE_RULE:
+            continue  # scoped to PR_PROBE_ITEM only; see ensure_pricing_rule_probe
         problems.append(
             f"active Pricing Rule {r['name']} ({r.get('title')}) will move derived "
             f"prices, so hardcoded expected totals will not match.")
@@ -273,6 +280,16 @@ def assert_clean_fixtures(client: FrappeClient) -> list[str]:
                 f"{row['valid_from']}. Scenarios posting before that date will find no "
                 f"price and the whole suite will fail for a reason that looks like "
                 f"something else.")
+
+    prules = client.call("frappe.client.get_list", doctype="Pricing Rule",
+                         filters={"title": PR_PROBE_RULE},
+                         fields=["name", "valid_from"], limit_page_length=0) or []
+    for pr in prules:
+        if pr.get("valid_from") and str(pr["valid_from"]) > PRICE_VALID_FROM:
+            problems.append(
+                f"Pricing Rule {pr['name']} is only valid from {pr['valid_from']}, so it "
+                f"will not fire for scenarios posting before that date and will look "
+                f"like the rule mechanism is broken rather than the fixture.")
 
     real = client.call("frappe.client.get_list", doctype="Item Price",
                        filters={"item_code": ITEM_CODE, "price_list": PRICE_LIST},
@@ -307,6 +324,59 @@ def ensure_tax_template(client: FrappeClient) -> None:
     print(f"  tax:    created {name} (18% on net total)")
 
 
+def ensure_pricing_rule_probe(client: FrappeClient) -> None:
+    """A 10% Pricing Rule scoped to ONE dedicated item.
+
+    Scoped deliberately. A rule covering the main fixture item would move prices
+    under every other scenario, which is exactly how a stray rule silently broke
+    the corpus earlier. assert_clean_fixtures tolerates this one by name.
+    """
+    if not client.exists("Item", PR_PROBE_ITEM):
+        client.insert({"doctype": "Item", "item_code": PR_PROBE_ITEM,
+                       "item_name": "Headless Pricing Rule Probe",
+                       "item_group": ITEM_GROUP, "stock_uom": "Nos",
+                       "is_stock_item": 0})
+        client.insert({"doctype": "Item Price", "item_code": PR_PROBE_ITEM,
+                       "price_list": PRICE_LIST, "price_list_rate": PR_PROBE_PRICE,
+                       "valid_from": PRICE_VALID_FROM})
+        print(f"  pr     : created {PR_PROBE_ITEM} at {PR_PROBE_PRICE}")
+    existing = client.call("frappe.client.get_list", doctype="Pricing Rule",
+                           filters={"title": PR_PROBE_RULE}, fields=["name"],
+                           limit_page_length=0) or []
+    if existing:
+        print(f"  pr     : {PR_PROBE_RULE} exists")
+        return
+    client.insert({"doctype": "Pricing Rule", "title": PR_PROBE_RULE,
+                   "apply_on": "Item Code", "price_or_product_discount": "Price",
+                   "selling": 1, "rate_or_discount": "Discount Percentage",
+                   "discount_percentage": 10, "company": COMPANY,
+                   # Third occurrence of this bug. ERPNext defaults valid_from
+                   # to the creation date on dated masters, so a rule created
+                   # today does not apply to a scenario posting yesterday and
+                   # simply never fires. It bit Item Price in this file, again
+                   # in simulate.py, and now Pricing Rule. Any fixture that
+                   # creates a dated master must pin it.
+                   "valid_from": PRICE_VALID_FROM,
+                   "items": [{"item_code": PR_PROBE_ITEM}]})
+    print(f"  pr     : created {PR_PROBE_RULE} (10% on {PR_PROBE_ITEM} only)")
+
+
+def ensure_sales_person(client: FrappeClient) -> None:
+    """A Sales Person with a 2% commission, for the fetch_if_empty probe.
+
+    Sales Team.commission_rate is one of the 75 fetch-fields that opt out of
+    Frappe's normal fetch enforcement, and one of the few that is also read-only
+    in the UI.
+    """
+    if client.exists("Sales Person", SALES_PERSON):
+        print(f"  rep    : {SALES_PERSON} exists")
+        return
+    client.insert({"doctype": "Sales Person", "sales_person_name": SALES_PERSON,
+                   "commission_rate": SALES_PERSON_COMMISSION,
+                   "is_group": 0, "enabled": 1})
+    print(f"  rep    : created {SALES_PERSON} at {SALES_PERSON_COMMISSION}% commission")
+
+
 def ensure_all(client: FrappeClient) -> dict:
     print("fixtures:")
     ensure_setup(client)
@@ -314,6 +384,8 @@ def ensure_all(client: FrappeClient) -> dict:
     ensure_customer(client)
     ensure_supplier(client)
     ensure_unpriced_item(client)
+    ensure_pricing_rule_probe(client)
+    ensure_sales_person(client)
     ensure_tax_template(client)
     ensure_foreign_currency(client)
     ensure_box_uom(client)
@@ -335,6 +407,8 @@ def ensure_all(client: FrappeClient) -> dict:
         "company": company,
         "item_code": ITEM_CODE,
         "unpriced_item": UNPRICED_ITEM,
+        "pr_probe_item": PR_PROBE_ITEM,
+        "sales_person": SALES_PERSON,
         "customer": CUSTOMER,
         "price_list": PRICE_LIST,
         "list_price": LIST_PRICE,

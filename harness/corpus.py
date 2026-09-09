@@ -118,12 +118,29 @@ class CorpusRunner:
         so a raw scenario still gets a normal company/customer/dates
         skeleton and only has to state the forged fields explicitly."""
         doctype = spec.get("doctype", "Sales Invoice")
-        header = self._header(spec.get("like", "bill"), spec.get("header"))
+        header = self._header(spec.get("like", "bill"),
+                              self._resolve_fixtures(spec.get("header")))
         doc = {**header, "doctype": doctype, "items": self._lines(spec.get("lines", []))}
         saved = self.c.insert(doc)
         if spec.get("submit"):
             saved = self.c.submit(saved)
         return {"doctype": doctype, "name": saved["name"], "doc": saved}
+
+    def _resolve_fixtures(self, obj):
+        """Swap fixture keys for their real names, at any depth.
+
+        A raw scenario writes `sales_person: sales_person` and means "whatever
+        the fixture called it". Line items already got this via `_lines`; header
+        child tables (Sales Team, taxes) did not, so a nested fixture key was
+        being posted to ERPNext as the literal string.
+        """
+        if isinstance(obj, dict):
+            return {k: self._resolve_fixtures(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [self._resolve_fixtures(v) for v in obj]
+        if isinstance(obj, str) and obj in self.fx:
+            return self.fx[obj]
+        return obj
 
     # ---- assertions ----------------------------------------------------------
 
@@ -159,6 +176,20 @@ class CorpusRunner:
                     f"(accounts seen: {sorted({r['account'] for r in rows})})")
             return
 
+        if kind == "header_field":
+            if not doc:
+                res.failures.append("header_field: no document in context"); return
+            dt, name = doc
+            d = self.c.get_doc(dt, name)
+            got, want = d.get(a["field"]), a["value"]
+            try:
+                bad = abs(float(got or 0) - float(want)) >= 0.01
+            except (TypeError, ValueError):
+                bad = got != want
+            if bad:
+                res.failures.append(f"header_field: {a['field']} expected {want}, got {got}")
+            return
+
         if kind in ("grand_total", "outstanding", "status", "docstatus"):
             if not doc:
                 res.failures.append(f"{kind}: no document in context"); return
@@ -176,12 +207,13 @@ class CorpusRunner:
             return
 
         if kind == "line_field":
+            table = a.get("table", "items")
             if not doc:
                 res.failures.append(f"{kind}: no document in context"); return
             dt, name = doc
             d = self.c.get_doc(dt, name)
             idx = a.get("row", 0)
-            items = d.get("items") or []
+            items = d.get(table) or []
             if idx >= len(items):
                 res.failures.append(f"line_field: row {idx} does not exist on {name}"); return
             got = items[idx].get(a["field"])

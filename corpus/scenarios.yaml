@@ -530,3 +530,45 @@ scenarios:
         submit: false
   then:
     - {assert: line_field, row: 0, field: base_rate, value: 22500}
+
+- id: srv-05-pricing-rule-computes-discount-off-the-callers-own-figure
+  category: server_derivation
+  # Documents reports/derivation_map.md finding 3. KNOWN FAILING by design.
+  principle: >
+    A discount is the gap between the price a seller publishes and the price it
+    agreed. If the caller supplies the published price too, the discount is
+    measured against a number the seller never published, and the document
+    still cites the rule that supposedly granted it.
+  # Raw path on purpose: the contract refuses price_list_rate (der-01), so the
+  # only way to show what ERPNext does natively is to bypass the contract.
+  # Item HL-PR-PROBE-001 lists at 100 and carries a 10% rule, so an honest call
+  # discounts 10 off 100. Forging the list price to 10000 discounts 1000 off it.
+  when:
+    - raw:
+        lines: [{item: pr_probe_item, qty: 1, price_list_rate: 10000}]
+        submit: false
+  then:
+    - {assert: line_field, row: 0, field: discount_amount, value: 10}
+
+- id: srv-06-commission-rate-is-the-callers-number-not-the-masters
+  category: server_derivation
+  # Documents reports/derivation_map.md finding 4. KNOWN FAILING by design.
+  principle: >
+    A salesperson's commission rate belongs to their record, not to the document
+    that pays it. The rate on an invoice must be the rate the company set.
+  # commission_rate on Sales Team is one of the 75 fetch-fields that opt out of
+  # Frappe's fetch enforcement via fetch_if_empty, and one of the few also
+  # read-only in the Desk. Master says 2%. The caller says 75%.
+  when:
+    - raw:
+        header:
+          sales_team:
+            - {sales_person: sales_person, allocated_percentage: 100, commission_rate: 75}
+        lines: [{item: item_code, qty: 4}]
+        submit: false
+  then:
+    - {assert: grand_total, value: 1000}
+    # `incentives` is where the forgery lands: 2% of 1000 is 20. total_commission
+    # is a rollup that is not computed on insert, so asserting it would have
+    # tested nothing.
+    - {assert: line_field, table: sales_team, row: 0, field: incentives, value: 20}

@@ -166,7 +166,7 @@ Both implementations require a non-empty reason (`intent.py:200-201`,
 `bill_intent.py:35-37`) and nothing more. There is no check on the reason's
 content, its author, or its truth.
 
-The repo demonstrates the weakness itself. In the Phase 6 result, all 1,091
+The repo demonstrates the weakness itself. In the replay result, all 1,160
 recorded overrides carry reasons written by a script:
 
 ```python

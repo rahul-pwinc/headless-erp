@@ -89,3 +89,7 @@ citations:  ## Verify every load-bearing source citation against the running con
 concurrency:  ## Race 20 simultaneous overrides; verify the audit chain survives
 	@echo "==> concurrency: 20 parallel overrides against the audit chain"
 	./.venv/bin/python harness/prove_concurrency.py
+
+numbers:  ## Regenerate the README Current numbers table from reports/clean/*.json
+	@echo "==> numbers: regenerating the README table from the artifacts"
+	./.venv/bin/python harness/render_numbers.py

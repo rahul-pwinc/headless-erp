@@ -74,6 +74,13 @@ def main() -> int:
     if bad:
         print("\nA wrong line number costs a reader their trust in every other number.")
     stale = check_counts(fix="--fix" in sys.argv)
+    # The generated table cannot drift, but it can go out of date if an artifact
+    # is regenerated without re-rendering. Fail on that too.
+    import subprocess as _sp
+    gen = _sp.run([sys.executable, "harness/render_numbers.py", "--check"],
+                  capture_output=True, text=True)
+    print(gen.stdout.strip() or gen.stderr.strip())
+    stale += (1 if gen.returncode else 0)
     return 1 if (bad or stale) else 0
 
 

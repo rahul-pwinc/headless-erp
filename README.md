@@ -11,6 +11,12 @@ most complete open-source ERP whose source you can read.
 
 ---
 
+> **All source citations refer to erpnext 16.34.1 and frappe 16.33.0**, the
+> versions running in `docker/pwd.yml`. Line numbers move between releases, and
+> twice during this work a number was read out of the develop branch by mistake.
+> `make citations` re-checks every load-bearing citation against the running
+> container and fails if one has drifted.
+
 ## The finding
 
 An ERP write mixes two kinds of value. Some the server can compute from its own
@@ -103,8 +109,8 @@ Python.
 ## Why this class of error survives every check you run
 
 **The ledger balances.** Always, by construction.
-`erpnext/accounts/general_ledger.py:397-427` calls
-`raise_debit_credit_not_equal_error` (`:460`) before a voucher posts. An
+`erpnext/accounts/general_ledger.py:473-503` calls
+`raise_debit_credit_not_equal_error` (`:536`) before a voucher posts. An
 unbalanced document cannot exist, so a balanced one tells you nothing. After
 2,876 submitted invoices on this instance, including every wrong document above,
 `reports/trial_balance.json` records 8,346 GL entries and 717,378.18 on both
@@ -264,7 +270,7 @@ constrained agent  POST /api/method/bill_intent      + a reason  ->  written, re
 
 The first line is the control case. Without it the 403 would prove only that
 something was broken. Frappe checks `create` permission inside
-`Document.insert()` (`frappe/model/document.py:730`), and every REST and
+`Document.insert()` (`frappe/model/document.py:477`), and every REST and
 `frappe.client` write route reaches `insert()` or `save()`, so denying `create`
 at the role level closes all nine of them at once. The only way in for that
 identity is `harness/server_scripts/bill_intent.py`, which enforces
@@ -353,7 +359,7 @@ runtime for every step.
 
 ```
 intents/catalog.yaml           11 intents, the derive/override/refuse contract, 27 invariants
-corpus/scenarios.yaml          39 scenarios asserting accounting principles, not ERPNext behaviour
+corpus/scenarios.yaml          52 scenarios asserting accounting principles, not ERPNext behaviour
 harness/intent.py              the client-side intent engine
 harness/enforce.py             provisions the role, the user and the endpoint
 harness/server_scripts/        bill_intent.py, the server-side enforced contract

@@ -308,6 +308,13 @@ class IntentEngine:
         saved = self.client.insert(doc)
         if submit:
             saved = self.client.submit(saved)
+            verify = self.client.get_doc(saved["doctype"], saved["name"])
+            if int(verify.get("docstatus") or 0) != 1:
+                res.invariant_failures.append(
+                    f"submit did not take: {saved['name']} is at docstatus "
+                    f"{verify.get('docstatus')}")
+            saved = verify
+            res.invariants_checked.append("submit actually posted (re-read)")
         res.name, res.docstatus = saved.get("name"), saved.get("docstatus")
         res.grand_total = saved.get("paid_amount")
         self._check_invariants(spec, saved, res)
@@ -462,6 +469,22 @@ class IntentEngine:
         saved = self.client.insert(doc)
         if submit and spec["maps_to"].get("submittable"):
             saved = self.client.submit(saved)
+            # Re-read from the server rather than trusting the submit response.
+            # The enforced endpoint taught this the hard way: doc.submit() there
+            # was a silent no-op because submit() reads ignore_permissions off
+            # the document flags rather than taking it as a parameter, so the
+            # call neither submitted nor raised, and the harness reported
+            # success while writing drafts for days.
+            #
+            # The general rule, and it is cheap: any check that asserts success
+            # must re-read the state it claims to have changed.
+            verify = self.client.get_doc(saved["doctype"], saved["name"])
+            if int(verify.get("docstatus") or 0) != 1:
+                res.invariant_failures.append(
+                    f"submit did not take: {saved['name']} is at docstatus "
+                    f"{verify.get('docstatus')} after submit() returned successfully")
+            saved = verify
+            res.invariants_checked.append("submit actually posted (re-read)")
         res.name = saved.get("name")
         res.docstatus = saved.get("docstatus")
         res.grand_total = saved.get("grand_total")

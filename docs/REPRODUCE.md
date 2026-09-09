@@ -155,7 +155,7 @@ permission or "method not whitelisted" error.
 ```bash
 make diff          # Phase 1 - the original differential (reports/latest.json)
 make census        # Phase 2 - silent-acceptance census (reports/census.json)
-make contract       # Phase 4 - the intent contract, 7 cases (reports/intent_proof.json)
+make contract       # Phase 4 - the intent contract, 10 cases (reports/intent_proof.json)
 make corpus         # Phase 5 - the 39-scenario corpus (reports/corpus.json)
 make boundary        # the enforcement boundary, 8 checks (reports/boundary.json)
 make simulate        # Phase 6 - replay 1,000 real invoices (reports/simulation.json)
@@ -172,8 +172,8 @@ Measured runtimes against a local stack on this machine (2026-09-08):
 | target | runtime | notes |
 |---|---|---|
 | `make census` | ~15s | 203 probes across 9 doctypes |
-| `make contract` | ~5s | 7 cases. **Hit a transient `QueryDeadlockError` on `tabSeries` on the first attempt** — a MariaDB naming-series race, not a code bug; retried immediately and passed 7/7. If this happens, just re-run. |
-| `make corpus` | ~10s | 39 scenarios |
+| `make contract` | ~5s | 10 cases. **Hit a transient `QueryDeadlockError` on `tabSeries` on the first attempt** — a MariaDB naming-series race, not a code bug; retried immediately and passed 7/7. If this happens, just re-run. |
+| `make corpus` | ~25s | 52 scenarios |
 | `make data` | ~55s | see above |
 | `make boundary` | ~5s | provisions the role/user/Server Script, then runs 8 checks; verified 8/8 (2026-09-08) |
 | `make simulate` | ~6 min | 1,000 invoices written twice (naive + intent); the committed `reports/simulation.json` is this exact run (378s, measured 2026-09-07). A 250-invoice smoke test (~78s) was also run during this pass to verify the target mechanically works, then the original 1,000-invoice `reports/simulation.json` was restored so the committed figures weren't disturbed. |

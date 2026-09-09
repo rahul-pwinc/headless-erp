@@ -1,6 +1,6 @@
 {
-  "passed": 8,
-  "total": 8,
+  "passed": 9,
+  "total": 9,
   "checks": [
     {
       "check": "admin direct write allowed",
@@ -32,6 +32,10 @@
     },
     {
       "check": "item with no resolvable price",
+      "pass": true
+    },
+    {
+      "check": "out-of-scope company refused",
       "pass": true
     }
   ]

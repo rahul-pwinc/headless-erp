@@ -64,7 +64,12 @@ def ensure(client: FrappeClient) -> dict:
     else:
         print(f"  user   : {AGENT_USER} exists")
 
-    script = open(SCRIPT_PATH).read()
+    # Substitute the scope at provisioning time. The endpoint refuses any other
+    # company, so the elevation inside it is bounded to one tenant.
+    company = (client.call("frappe.client.get_list", doctype="Company",
+                           fields=["name"], limit_page_length=0) or [{}])[0].get("name", "")
+    script = open(SCRIPT_PATH).read().replace("__ALLOWED_COMPANY__", company)
+    print(f"  scope  : endpoint bound to company {company!r}")
     if client.exists("Server Script", "bill_intent"):
         client.call("frappe.client.set_value", doctype="Server Script",
                     name="bill_intent", fieldname="script", value=script)

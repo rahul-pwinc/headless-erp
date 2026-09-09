@@ -6,6 +6,33 @@ boundary so that a reader does not have to discover it themselves.
 
 Claim numbers refer to [CLAIMS.md](CLAIMS.md).
 
+## Concurrency: safe, not available
+
+Measured, not assumed. `make concurrency` fires 20 simultaneous overrides through
+the enforced endpoint and then verifies the hash chain
+(`reports/concurrency.json`).
+
+**Integrity holds.** No duplicate sequence numbers, no gaps, no forked
+`prev_hash`, and `verify_chain` reports ok. The fork this test was written to
+find does not happen.
+
+**Availability does not.** Typically 3 or 4 of 20 writes land; the rest are
+rejected with `QueryDeadlockError`. MariaDB's row locking is what prevents the
+fork, and it prevents it by refusing most of the concurrent writes. The endpoint
+does not retry, and it cannot usefully retry inside its own request because a
+deadlock has already aborted the transaction. **A caller issuing parallel
+overrides will silently lose them unless it retries.**
+
+For an audit chain, integrity is the property that matters and it is the one that
+holds. Availability is a real operational limit and it is stated here rather than
+hidden behind a green check.
+
+One incidental finding from building the test: Frappe's own login races. Four of
+five concurrent `/api/method/login` calls for the same user return 500. That is a
+fact about frappe, not about this control, but any client planning to parallelise
+should authenticate once and share the session rather than logging in per worker.
+
+
 ## 1. One vendor
 
 Everything in this repo is ERPNext. One ERP, one framework, one API shape.
@@ -111,7 +138,7 @@ GRNI balance equals goods received and not yet invoiced
 None of these has ever executed. Both fixture items are created with
 `is_stock_item: 0` (`harness/fixtures.py:61`, `:96`), as are the items built
 from the real dataset (`harness/simulate.py:52`). The corpus contains no
-scenario using `fulfil` or `receive`: the 39 scenarios use `bill` (23),
+scenario using `fulfil` or `receive`: the 52 scenarios use `bill` (23),
 `collect` (8), `expense` (7), `quote` (3), `pay` (3), `return` (2), `sell` (1),
 `procure` (1), `source` (1), and one deliberately unknown intent.
 

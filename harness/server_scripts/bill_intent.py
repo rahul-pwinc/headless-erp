@@ -26,6 +26,20 @@
 # happen. Length prefixes need no escaping at all.
 
 args = frappe.form_dict
+
+# ---------------------------------------------------------------------------
+# Identity scope. The elevation below (ignore_permissions) is deliberate: the
+# constrained role has no write permission on Sales Invoice, so an endpoint that
+# runs elevated is the mechanism, not a shortcut. But elevation without a scope
+# means this identity could bill on behalf of any company on the site. The
+# allowed company is written in at provisioning time by harness/enforce.py and
+# anything else is refused before a document is built.
+ALLOWED_COMPANY = "__ALLOWED_COMPANY__"
+
+if ALLOWED_COMPANY and args.get("company") != ALLOWED_COMPANY:
+    frappe.throw("this identity may only bill for " + ALLOWED_COMPANY
+                 + ", not " + str(args.get("company")))
+
 items = args.get("items") or []
 overrides = args.get("overrides") or []
 price_list = args.get("selling_price_list") or "Standard Selling"
@@ -89,8 +103,26 @@ doc = frappe.get_doc({
 })
 doc.insert(ignore_permissions=True)
 
+# Submit. Leaving the document at docstatus 0 was a real hole: the control
+# checked drift once at insert and then walked away, leaving a draft window in
+# which anyone with a normal role could edit the rate and submit, while the
+# audit record still described the draft. Submitting here closes that window
+# for documents this endpoint creates.
+#
+# It also matters that validate runs AGAIN on submit, so a Pricing Rule can fire
+# a second time and move a rate after the insert-time reconciliation. That is
+# why the reconciliation below reads doc.items AFTER the submit, not before.
+# insert() takes ignore_permissions as a parameter; submit() does not. It reads
+# the flag off the document. Calling doc.submit() without setting it leaves the
+# document at docstatus 0 and does NOT raise, so the endpoint reported success
+# while every invoice it wrote stayed a draft. Silent no-op, exactly the failure
+# mode this project is about.
+doc.flags.ignore_permissions = True
+doc.submit()
+doc.reload()
+
 # ---------------------------------------------------------------------------
-# Reconcile intent against what was actually persisted.
+# Reconcile intent against what was actually persisted, post-submit.
 # ---------------------------------------------------------------------------
 lines = []
 drift_rows = []

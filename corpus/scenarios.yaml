@@ -403,6 +403,7 @@ scenarios:
 # here because the caller never went through it.
 
 - id: srv-01-conversion-factor-follows-item-uom-not-caller
+  # Documents reports/derivation_map.md finding 7. KNOWN FAILING by design.
   category: server_derivation
   principle: >
     The quantity recorded in the stock ledger must follow the item's own
@@ -424,6 +425,7 @@ scenarios:
   then: [{assert: line_field, row: 0, field: stock_qty, value: 70}]
 
 - id: srv-02-naive-write-must-not-redefine-master-price
+  # Documents reports/derivation_map.md finding 5. KNOWN FAILING by design.
   category: server_derivation
   principle: A transaction may not silently redefine master data.
   # KNOWN FAILING -- reports/derivation_map.md finding 5. Stock Settings
@@ -491,3 +493,40 @@ scenarios:
   then:
     - {assert: docstatus, value: 0}
     - {assert: no_gl}
+
+- id: srv-03-naive-caller-may-assert-the-exchange-rate
+  # Documents reports/derivation_map.md finding 1, the repo headline. KNOWN FAILING by design.
+  category: server_derivation
+  principle: >
+    A foreign-currency invoice must post to the ledger at the published rate
+    for its posting date. The rate is a fact about the world, not a number the
+    writer of the document gets to choose.
+  # KNOWN FAILING, and this is the repo's headline finding, so it belongs in the
+  # corpus rather than in a scratchpad. Uses the raw path deliberately: the
+  # contract already refuses conversion_rate (der-11..13), so the only way to
+  # demonstrate what ERPNext does natively is to bypass the contract.
+  #
+  # The fixture pins USD->INR at 90.0 on the posting date, so omitting the field
+  # posts 4 x 250 x 90 = 90,000. Asserting 1.0 posts 1,000. Balanced either way.
+  when:
+    - raw:
+        header: {currency: USD, conversion_rate: 1.0, price_list_currency: USD}
+        lines: [{item: item_code, qty: 4, rate: 250}]
+        submit: false
+  then:
+    - {assert: grand_total, value: 1000}
+    - {assert: line_field, row: 0, field: base_rate, value: 22500}
+
+- id: srv-04-omitting-the-rate-derives-it
+  category: server_derivation
+  principle: >
+    The control case for srv-03. With the rate omitted the server derives it
+    from its own Currency Exchange record, which is what makes the assertion
+    in srv-03 a forgery rather than a missing feature.
+  when:
+    - raw:
+        header: {currency: USD, price_list_currency: USD}
+        lines: [{item: item_code, qty: 4, rate: 250}]
+        submit: false
+  then:
+    - {assert: line_field, row: 0, field: base_rate, value: 22500}

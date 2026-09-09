@@ -36,7 +36,13 @@ def main() -> int:
         print(f"   unexpected: {str(e)[:90]}"); results.append(("admin direct write allowed", False))
 
     print("\n2. direct write, constrained identity")
+    # The agent path uses a raw session, so it must carry the same Host header
+    # the FrappeClient does. Without this every agent-side call silently went to
+    # the default site while the Administrator half honoured ERPNEXT_SITE, so a
+    # "clean site" run was actually testing two different sites at once.
     s = requests.Session()
+    if os.environ.get("ERPNEXT_SITE"):
+        s.headers["Host"] = os.environ["ERPNEXT_SITE"]
     s.post(f"{URL}/api/method/login", json={"usr": AGENT_USER, "pwd": AGENT_PASSWORD})
     r = s.post(f"{URL}/api/resource/Sales Invoice",
                json={**HDR, "items": [{"item_code": "HL-WIDGET-001", "qty": 4, "rate": 1.0}]})
@@ -60,6 +66,16 @@ def main() -> int:
         if rr.status_code == 200:
             m = rr.json()["message"]; l = m["lines"][0]
             ok = not expect_block
+            # The endpoint used to insert and never submit, so every invoice it
+            # wrote sat at docstatus 0 with drift checked once at insert and a
+            # draft window left open for anyone to edit the rate and submit.
+            # Assert the document is actually posted, or the control is writing
+            # drafts and calling it done.
+            posted = admin.get_doc("Sales Invoice", m["name"])
+            if int(posted.get("docstatus") or 0) != 1:
+                ok = False
+                print(f"        NOT SUBMITTED: {m['name']} is at docstatus "
+                      f"{posted.get('docstatus')}")
             print(f"   {'ok  ' if ok else 'FAIL'} {label}")
             print(f"        {m['name']} list={l['derived']} requested={l['intended']} stored={l['stored']}"
                   # `drift` is now always present on the response ("none" /
@@ -71,6 +87,16 @@ def main() -> int:
             ok = expect_block
             print(f"   {'ok  ' if ok else 'FAIL'} {label}\n        refused: {srv_msg(rr.json())[:100]}")
         results.append((label, ok))
+
+    print("\n4. identity scope")
+    rr = s.post(f"{URL}/api/method/bill_intent",
+                json={**HDR, "company": "Some Other Co",
+                      "items": [{"item_code": "HL-WIDGET-001", "qty": 4}], "overrides": []})
+    scoped = rr.status_code != 200
+    print(f"   {'ok  ' if scoped else 'FAIL'} billing for a company this identity does not own")
+    if scoped:
+        print(f"        refused: {srv_msg(rr.json())[:90]}")
+    results.append(("out-of-scope company refused", scoped))
 
     passed = sum(1 for _, p in results if p)
     print(f"\n{'='*66}\n{passed}/{len(results)} boundary checks passed")

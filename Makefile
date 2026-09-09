@@ -44,7 +44,7 @@ census:
 
 # --- Phase 4: the intent-layer contract, proved -------------------------
 contract:
-	@echo "==> contract: Phase 4 intent-layer proof (7 cases)"
+	@echo "==> contract: Phase 4 intent-layer proof (10 cases)"
 	$(PYTHON) harness/prove_intent.py
 	@echo "==> contract: done -- reports/intent_proof.json"
 
@@ -59,7 +59,7 @@ boundary:
 
 # --- Phase 5: the use-case corpus -----------------------------------------
 corpus:
-	@echo "==> corpus: Phase 5 use-case corpus (39 accounting-principle scenarios)"
+	@echo "==> corpus: Phase 5 use-case corpus (52 accounting-principle scenarios)"
 	$(PYTHON) harness/run_corpus.py
 	@echo "==> corpus: done -- reports/corpus.json"
 
@@ -81,3 +81,11 @@ all: setup up data diff census contract corpus boundary simulate
 trial-balance:  ## Produce reports/trial_balance.json (reproducibility only; see the script header)
 	@echo "==> trial balance (guaranteed balanced by construction)"
 	./.venv/bin/python harness/trial_balance.py
+
+citations:  ## Verify every load-bearing source citation against the running container
+	@echo "==> citations: check line numbers against the running erpnext/frappe"
+	./.venv/bin/python harness/verify_citations.py
+
+concurrency:  ## Race 20 simultaneous overrides; verify the audit chain survives
+	@echo "==> concurrency: 20 parallel overrides against the audit chain"
+	./.venv/bin/python harness/prove_concurrency.py

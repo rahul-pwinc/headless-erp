@@ -170,7 +170,7 @@ ships server-side price controls, and an honest pitch names them first.
 | `Selling Settings.validate_selling_price` | `selling_controller.py:287-332` | `0` (off) | A net rate below last purchase rate or valuation | Compares against cost, not against the price list. A price above cost but far below list passes. |
 | Pricing Rule | `taxes_and_totals.py:170-221` | none defined | Applies a configured discount or margin during validate, overwriting whatever the caller sent | It is a pricing mechanism, not a control. It silently replaces caller values including deliberate overrides, which is its own problem (see below). |
 | Server Script, doctype event | `frappe/model/document.py:1705` | none installed | Anything you write, server-side, on the API path as well as the UI path | You have to write it, per field, per doctype, and keep it correct as the schema moves. This is also the mechanism this project's own boundary uses. |
-| Role permissions | `frappe/model/document.py:730` | full access for System Manager | Denies `create`/`write` on a doctype entirely | All or nothing at the doctype level. It cannot express "may write this document but not assert this field," which is why the boundary pairs it with an endpoint. |
+| Role permissions | `frappe/model/document.py:477` | full access for System Manager | Denies `create`/`write` on a doctype entirely | All or nothing at the doctype level. It cannot express "may write this document but not assert this field," which is why the boundary pairs it with an endpoint. |
 
 Read that table as the case against building this rather than for it, then note
 what survives. `maintain_same_sales_rate` is the closest existing control and it

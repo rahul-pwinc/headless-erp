@@ -60,7 +60,7 @@ is a measurement of that instance in that state, not of stock ERPNext.
 | 1.4 | This is intended behaviour, not a defect in ERPNext. | The `is None` gate is what lets a manually entered discount survive a re-save. No ERPNext issue or fix is claimed. | inference | D |
 | 1.5 | Field-level `read_only` is never consulted in Frappe's server-side save or validate path. It is a rendering hint. | Exhaustive grep for `.read_only` / `"read_only"` in `vendor/frappe/frappe/model/*.py` returns only doctype-level `meta.read_only` (`document.py:1957`) and the request-level `frappe.flags.read_only` (`document.py:2217,2250`). No DocField-level check exists. | source | A |
 | 1.6 | 1.5 is a general Frappe property, true of every read-only field on every doctype, and is not an ERPNext discovery. | Follows from 1.5: the check is absent framework-wide, not absent for pricing. | inference | D |
-| 1.7 | ERPNext refuses to post an unbalanced voucher. | `vendor/erpnext/erpnext/accounts/general_ledger.py:397-427` calls `raise_debit_credit_not_equal_error` (`:460`) whenever `abs(debit_credit_diff) > allowance`, with a single carve-out for Exchange Gain Or Loss journal entries. | source | A |
+| 1.7 | ERPNext refuses to post an unbalanced voucher. | `vendor/erpnext/erpnext/accounts/general_ledger.py:536`) whenever `abs(debit_credit_diff) > allowance`, with a single carve-out for Exchange Gain Or Loss journal entries. | source | A |
 | 1.8 | Therefore a balanced trial balance is guaranteed by construction and is evidence of nothing about the correctness of any amount. | 1.7 | inference | A |
 | 1.9 | ERPNext's GL layer independently validates account structure: group accounts, inactive accounts, frozen accounts, company and cost-center mismatch. Claims that an agent can "corrupt the books" through these paths are wrong. | `gl_entry.py` validation block, cited in README as `:232-275` (v16 line numbers; not re-verified against the v17 tree for this register) | source | B |
 | 1.10 | ERPNext mutates item values during `validate`, after the caller's values are set, when a Pricing Rule applies. | `vendor/erpnext/erpnext/controllers/taxes_and_totals.py:170-221`. Reproduced: `reports/census.json` records Sales Invoice and Delivery Note probes where the caller supplied `rate: 7.0` and the stored value is `225.0`, which is 10% off the 250.00 list price and is neither the caller's value nor the derived value. | both | A |
@@ -114,7 +114,7 @@ list price 250.00, qty 4.
 | 4.5 | The reason is persisted on the document. | `harness/intent.py:250-254` writes `doc["remarks"]`. | source | B. `remarks` is a free-text `Small Text` on Sales Invoice, parent level, not per line. Multiple overrides are joined into one string. The enforced endpoint uses a Comment instead (claim 7.5). |
 | 4.6 | The persisted reason cannot be edited after submission. | `sales_invoice.json` `remarks` carries no `allow_on_submit`, and `vendor/frappe/frappe/model/base_document.py:1353-1361` throws on any change to a non-`allow_on_submit` field of a submitted document. | source | B. Cancel-and-amend produces a new document and is not blocked by this. |
 | 4.7 | The engine's own invariant check verifies the override delta is recorded in the correct one of ERPNext's two places (`discount_amount` below list, `margin_rate_or_amount` above). | `harness/intent.py:302-321`. ERPNext's behaviour confirmed in source at `vendor/erpnext/erpnext/controllers/taxes_and_totals.py:205-221`. | both | A |
-| 4.8 | 7 of 7 contract cases behave as specified. | `reports/intent_proof.json`, cases enumerated in `harness/prove_intent.py:47-72` | empirical | B |
+| 4.8 | 10 of 10 contract cases behave as specified. | `reports/intent_proof.json`, cases enumerated in `harness/prove_intent.py:47-72` | empirical | B |
 | 4.9 | 39 of 39 corpus scenarios pass. | `reports/corpus.json` | empirical | B |
 | 4.10 | The corpus asserts on accounting principles rather than on ERPNext's behaviour. | `corpus/scenarios.yaml`, each scenario carries a `principle` field | derived | C. True as written, but of the 39, 22 (`order_to_cash`, `commitments`, `collection`, `procure_to_pay`) assert properties ERPNext guarantees by construction and which no intent-layer bug could break. The 12 that actually exercise the contract are `derivation_contract` (10) and `returns` (2), plus `grd-01` and `grd-04`. |
 | 4.11 | The corpus caught a real defect in its own setup (`der-08-unpriced-item-refused` passed for the wrong reason because the fixture item had a buying-list price). | Narrated in the README. The fixed state is `harness/fixtures.py:88-98`, which adds `HL-UNPRICED-001` with no price in any list. | derived | B. The original failing state is not preserved in the repo, so a reader cannot re-observe it. |
@@ -156,7 +156,7 @@ list price 250.00, qty 4.
 | 7.1 | A boundary exists that makes the contract non-bypassable for a constrained identity. 8 of 8 checks pass. | `reports/boundary.json` | empirical | B |
 | 7.2 | An unconstrained identity (`Administrator`) can still POST a Sales Invoice with `rate: 1.0` straight to `/api/resource` and it is accepted. | `reports/boundary.json` check `admin direct write allowed`, driven by `harness/prove_boundary.py:29-36` | empirical | A. This is the control case. Without it the 403 in 7.3 would prove nothing about the boundary and only that something was broken. |
 | 7.3 | The constrained identity gets HTTP 403 on the same direct write. | `reports/boundary.json` check `agent direct write blocked`; the request is made with a plain `requests.Session` after logging in as the agent user (`harness/prove_boundary.py:38-46`), so nothing about the check depends on the client library behaving. | empirical | B |
-| 7.4 | The permission denial is enforced by Frappe itself, not by anything in this repo. | `Document.insert()` calls `check_permission("create")` at `vendor/frappe/frappe/model/document.py:730`, and every REST and `frappe.client` write route reaches `insert()` or `save()`. | source | A |
+| 7.4 | The permission denial is enforced by Frappe itself, not by anything in this repo. | `Document.insert()` calls `check_permission("create")` at `vendor/frappe/frappe/model/document.py:477`, and every REST and `frappe.client` write route reaches `insert()` or `save()`. | source | A |
 | 7.5 | The server-side endpoint enforces the same four rules as the client engine: refuse a refused field, refuse a directly supplied `rate`, require a reason on an override, refuse an unpriceable item. | `harness/server_scripts/bill_intent.py:13-42`; the four corresponding checks in `reports/boundary.json` | both | B |
 | 7.6 | The boundary covers one intent. | `bill_intent` is the only Server Script installed (`harness/enforce.py:67-76`). The other ten intents in `intents/catalog.yaml` have no server-side counterpart. | derived | A |
 | 7.7 | The boundary binds only identities somebody deliberately constrained. | `harness/enforce.py:21-33` creates one role with read-only permission on 24 master doctypes and no write permission on any transaction doctype. Every pre-existing ERPNext role is untouched. | derived | A. Any user holding a normal role, including every human, writes directly as before. This is a deployment property, not a defect, but it must never be described as "the API is now closed." |
@@ -231,7 +231,7 @@ derivation being overwritten (claims 2.6 to 2.8).
 ### R4. "The trial balance demonstration is a finding."
 
 **Retracted.** Presenting a balanced trial balance as a result implies the
-opposite outcome was possible. It was not: `general_ledger.py:397-427` refuses
+opposite outcome was possible. It was not: `general_ledger.py:473-503` refuses
 to post an unbalanced voucher. The demonstration is only usable in the negative
 direction (claim 3.5), and any presentation that lets a reader think otherwise
 should be rewritten.
@@ -262,6 +262,45 @@ ever built or scored in this repo, so no precision or recall figure exists here
 to compare against. Anyone quoting the 6 to 9 percent as a detector's false
 positive rate should say that it is a deviation rate over a single seller's
 historical data and that no detector was run on it.
+
+### R6. "The enforcement boundary passes 8 of 8 checks."
+
+**Published in:** every commit from `d3d5edf` (which introduced the boundary) up to the commit that adds this entry, in README, POSITIONING and
+`reports/boundary.json`.
+**Retracted. Every boundary figure published in that range was wrong**, and not
+by a small margin. Two independent defects:
+
+**The endpoint never submitted anything.** `bill_intent.py` called
+`doc.submit()`, but `insert()` takes `ignore_permissions` as a parameter while
+`submit()` reads it off `doc.flags`. The call was a silent no-op: it neither
+submitted nor raised. Every Sales Invoice written through the control sat at
+`docstatus 0`, nothing reached the general ledger through the control path, and
+drift was checked exactly once at insert. A draft window was left open in which
+anyone with a normal role could edit the rate and submit, while the audit record
+went on describing the draft. **The control we were describing had never posted
+an invoice.**
+
+**The boundary test measured two sites at once.** `prove_boundary.py` routed its
+Administrator half through `FrappeClient`, which honours `ERPNEXT_SITE`, but
+built a bare `requests.Session()` for the agent half with no `Host` header. Under
+`ERPNEXT_SITE=clean.local` the privileged half ran against the clean site and the
+constrained half against the default site. The two halves of a test whose entire
+purpose is to compare privileged and constrained behaviour were not comparing the
+same system.
+
+**Fixed in the commit that adds this entry.** `doc.flags.ignore_permissions = True` before
+submit; the raw session carries the Host header; and `prove_boundary.py` now
+re-reads the document and fails the check when `docstatus != 1`, so it cannot
+regress silently. Verified: a submitted invoice at `docstatus 1` with GL entries
+posted comes out of the endpoint.
+
+**The general lesson, applied repo-wide:** any check that asserts success must
+re-read the state it claims to have changed. `IntentEngine` now re-reads after
+every submit rather than trusting the response, and records
+`submit actually posted (re-read)` as a checked invariant. `harness/corpus.py`
+already re-read and asserted `docstatus` and GL entries; it was audited and is
+clean. This class of bug is invisible to any harness that trusts its own writes.
+
 
 ## Claims we are not making
 

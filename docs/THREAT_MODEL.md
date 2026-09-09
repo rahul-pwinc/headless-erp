@@ -29,7 +29,7 @@ with that as the frame.
 ## What is being protected
 
 Not the ledger. ERPNext defends the ledger perfectly well: it refuses
-unbalanced vouchers (`general_ledger.py:397-427`), blocks postings to group,
+unbalanced vouchers (`general_ledger.py:473-503`), blocks postings to group,
 inactive, and frozen accounts, and rejects company and cost-center mismatch.
 Nothing here improves on that and nothing here needs to.
 
@@ -118,7 +118,7 @@ Plus Data Import, the bench console, and any custom whitelisted method already
 installed on the site.
 
 **Why the boundary closes all of them at once.** Frappe checks `create`
-permission inside `Document.insert()` (`frappe/model/document.py:730`), and every
+permission inside `Document.insert()` (`frappe/model/document.py:477`), and every
 route in the table reaches `insert()` or `save()`. So denying `create` at the
 role level denies the whole table, not one endpoint. `harness/enforce.py:21-56`
 does exactly that: a role with read-only permission on 24 master doctypes and no
@@ -353,7 +353,7 @@ the two numbers is wrong as stated.
 - **Authentication and authorisation.** Frappe's problem. If an agent has
   credentials it should not have, nothing here helps.
 - **Preventing an unbalanced ledger.** Impossible to trigger
-  (`general_ledger.py:397-427`) and therefore not a control anyone needs.
+  (`general_ledger.py:473-503`) and therefore not a control anyone needs.
 - **Detecting bad records after the fact.** Not because it is impossible, which
   was an earlier claim of this project and is retracted (claim R5), but because
   it answers a different question. A detector against a per-customer reference

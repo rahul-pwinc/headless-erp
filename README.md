@@ -343,6 +343,8 @@ runtime for every step.
 
 ## Documentation
 
+[docs/EXECUTIVE_SUMMARY.md](docs/EXECUTIVE_SUMMARY.md) — one page for a finance or audit reader. What is proven, what is not, and what it would cost to run for real. Start there if you will not be reading code.
+
 | document | what it is for |
 |---|---|
 | [docs/CLAIMS.md](docs/CLAIMS.md) | every claim, its evidence, its verification method, and a strength rating from A to D. Inference is labelled inference. Read this first if you are hostile. |
